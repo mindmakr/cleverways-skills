@@ -11,7 +11,10 @@ The goal is a merge verdict backed by evidence: the PR fully covers its linked i
 
 ## One round
 
-1. **Load.** Run `review-state.mjs get <pr>` and `review-state.mjs issues <pr>`. Also run `gh pr view <pr> --json headRefOid,body,files,baseRefName`.
+1. **Load.** Run `review-state.mjs get <pr>` and `review-state.mjs issues <pr>`. Also run `gh pr view <pr> --json state,mergeCommit,headRefOid,body,files,baseRefName`.
+   - **Merged:** set the verdict to `MERGED`, close the linked issues by the profile's rule (a comment naming the PR and merge commit), update the tracker, and stop.
+   - **Closed without merging:** set the verdict to `CLOSED`, update the tracker, and stop.
+   - **Replies:** read the replies to your inline comments (`gh api repos/<repo>/pulls/<pr>/comments`). "Fixed in <sha>" is checked in step 4. A disagreement becomes a question for the user in step 5.
    - If `headRefOid` equals the state's `reviewedSha`, nothing new has been pushed. Report the current state and stop. Re-reviewing the same commit is the loop to avoid.
 2. **Scope.** The linked issues are those `issues` printed; their acceptance checklists are the coverage goal. Take linked PRs in other repos from the issues.
    - When the PR links no issue, the PR description is the goal: turn its claims into checklist items. In the first round, ask once whether that is the full scope.

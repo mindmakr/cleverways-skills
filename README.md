@@ -11,6 +11,7 @@ Agent skills for everyday engineering work. They are generic: each project descr
 | `planning-replacements` | Plan replacing one behaviour or implementation with another: inventory, cutover, and removal of the old way |
 | `planning-refactors` | Plan an improvement that leaves behaviour unchanged: behaviour lock first, measured before and after |
 | `planning-work` | The shared steps the planning skills use: investigate, draft, confirm once, create on GitHub |
+| `verifying-fixes` | Check a fixed issue's acceptance items with evidence, then close or reopen it |
 | `reviewing-prs` | Review a PR against its linked issues and the project rules until it is ready to merge; findings and questions are tracked in one comment on the PR |
 | `writing-release-notes` | Draft a GitHub release per repo, plus a plain-language page for stakeholders |
 | `aligning-translations` | Check locale parity, fix missing or untranslated keys, add a language |
@@ -27,6 +28,8 @@ plan            planning-epics / -features / -replacements / -refactors   → mi
 investigate     investigating-issues                                        → linked issues, one per repo
 build           resolving-issues                                            → test-first fix, one PR per repo
 review          reviewing-prs                                               → verdict + tracking comment, round per new commit
+fix review      resolving-issues #<pr>                                      → open findings fixed on the same branch, replies, next round
+verify          verifying-fixes                                             → acceptance items checked with evidence → close or reopen
 test            testing-web-visually / testing-mobile-visually              → screenshots → reporting-visual-defects → visual-test issues
 ship            writing-release-notes                                       → GitHub releases (changes, testers, devops) + stakeholder page
 always          project-profile, writing-plainly, aligning-translations
@@ -79,6 +82,8 @@ Type the slash command, or describe the task in words; the agent picks the skill
 | resolving-issues | `/cleverways:resolving-issues #123` | A failing test, then the fix, the checks run, and one PR per repo. Nothing is merged. |
 | planning-epics / -features / -replacements / -refactors | `/cleverways:planning-epics early settlement for employers` | A draft plan to confirm once, then a milestone, a parent issue and `task` sub-issues on GitHub. No code changes. |
 | reviewing-prs | `/cleverways:reviewing-prs #565` | A verdict (READY TO MERGE / NEEDS FIXES / BLOCKED ON), inline comments for new findings, and a tracking comment updated each round. Re-running after new commits reviews only the new commits; it never merges. |
+| resolving-issues (review fixes) | `/cleverways:resolving-issues #565` | The PR's open review findings fixed on its branch, a `Fixed in <sha>` reply on each, then a new review round. |
+| verifying-fixes | `/cleverways:verifying-fixes #567` | A pass/fail table per acceptance item with evidence, then the issue closed or reopened. |
 | writing-release-notes | `/cleverways:writing-release-notes since the last promotion` | Draft GitHub releases (changes, for testers, for devops) and a stakeholder page. |
 | aligning-translations | `/cleverways:aligning-translations` or "add French" | A parity table per repo and locale, then the fixes. |
 | testing-web-visually | `/cleverways:testing-web-visually the declined screens` | Screenshots per role, locale and size, automatic checks, a visual review, and `visual-test` issues. Local stack only. |
