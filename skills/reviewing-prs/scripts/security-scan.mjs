@@ -7,6 +7,8 @@
 //                 files, minus findings the same files already had at the merge base
 //   dependencies  osv-scanner on every lockfile, minus advisories the merge base already had;
 //                 skipped when the PR changes no lockfile
+//   workflows     workflow-limits.mjs on changed GitHub Actions workflows: time limits,
+//                 cancel-on-new-push, no macOS or Windows on every push (no Docker needed)
 //
 // Only the changed files and lockfiles are copied out of git, so no scanner needs git and the
 // run takes seconds. Secret values are never printed.
@@ -20,6 +22,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { workflowLimits } from './workflow-limits.mjs';
 
 // Each image runs its own tool by default, except Semgrep, which is named in the command.
 const IMAGES = {
@@ -69,7 +72,7 @@ const exportFiles = (ref, files, dir) => {
   }
 };
 const readJson = (p) => { try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return null; } };
-const result = { base, head, mergeBase, changedFiles: live.length, secrets: [], code: [], dependencies: [], notRun: [] };
+const result = { base, head, mergeBase, changedFiles: live.length, secrets: [], code: [], dependencies: [], workflows: [], notRun: [] };
 
 try {
   // 1. Secrets: each changed file rebuilt from its added lines only, keeping the real line numbers.
@@ -136,16 +139,20 @@ try {
     const now = pairs(head, 'head'), before = pairs(mergeBase, 'base');
     if (now && before) for (const [k, v] of now) if (!before.has(k)) result.dependencies.push(v);
   }
+  // 4. Workflows: the settings that stop a broken build from burning the month's minutes.
+  for (const f of live.filter((p) => /^\.github\/workflows\/[^/]+\.ya?ml$/.test(p)))
+    for (const problem of workflowLimits(git('show', `${head}:${f}`), f)) result.workflows.push(problem);
 } finally {
   rmSync(work, { recursive: true, force: true });
 }
 
-const total = result.secrets.length + result.code.length + result.dependencies.length;
+const total = result.secrets.length + result.code.length + result.dependencies.length + result.workflows.length;
 if (asJson) console.log(JSON.stringify(result, null, 1));
 else {
   console.log(`Security scan of ${result.changedFiles} changed files, ${mergeBase.slice(0, 8)}..${head.slice(0, 8)}: ${total} new finding(s).`);
   for (const s of result.secrets) console.log(`  secret   ${s.where}  ${s.rule} (value not shown)`);
   for (const c of result.code) console.log(`  code     ${c.where}  ${c.severity} ${c.rule}: ${c.message}`);
+  for (const w of result.workflows) console.log(`  workflow ${w}`);
   for (const d of result.dependencies) console.log(`  package  ${d.package} in ${d.lockfile}  ${d.severity ?? '?'} ${d.id} ${d.summary}`);
   for (const n of result.notRun) console.log(`  not run  ${n}`);
 }

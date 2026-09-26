@@ -12,7 +12,7 @@ Agent skills for everyday engineering work. They are generic: each project descr
 | `planning-refactors` | Plan an improvement that leaves behaviour unchanged: behaviour lock first, measured before and after |
 | `planning-work` | The shared steps the planning skills use: investigate, draft, confirm once, create on GitHub |
 | `verifying-fixes` | Check a fixed issue's acceptance items with evidence, then close or reopen it |
-| `reviewing-prs` | Review a PR against its linked issues and the project rules until it is ready to merge; findings and questions are tracked in one comment on the PR. Every round runs a local security scan (gitleaks, Semgrep, osv-scanner through Docker) on what the PR adds |
+| `reviewing-prs` | Review a PR against its linked issues and the project rules until it is ready to merge; findings and questions are tracked in one comment on the PR. Every round runs a local security scan (gitleaks, Semgrep, osv-scanner through Docker) on what the PR adds, and checks changed workflows for the limits that stop a broken build burning a month of CI minutes (`workflow-limits.mjs`, also run by CI) |
 | `writing-release-notes` | Draft a GitHub release per repo, plus a plain-language page for stakeholders |
 | `setting-up-project-tracking` | One GitHub Project across the repos: sprints, a Release field, and scrum, backlog, roadmap, release-notes, bug-triage and pull-request views. Its `board.mjs` keeps the board live: every skill moves cards as it acts, and `sync` repairs hand-made drift |
 | `managing-translations` | Check locale parity, fix missing or untranslated keys, add a language |
