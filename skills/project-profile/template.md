@@ -69,6 +69,13 @@ Shared: <path to another repo's profile, or delete this line>
 - Testers: <where test accounts come from, which locales and sizes to check>
 - Rollback: <how to redeploy the previous version, and whether migrations are reversible>
 
+## Tracking
+
+- Board: <GitHub Project URL>, one board for every repo above
+- Platform per repo: <repo → Backend / Web / Mobile>
+- Releases: Release field values <v1.0.0, v1.1.0>. Milestones are epics (planning-epics)
+- Sprints: <N days, starting <day>, Sprint 1 from YYYY-MM-DD> or kanban
+
 ## Terms
 
 | Say | Never say | Why |
