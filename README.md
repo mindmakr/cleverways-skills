@@ -6,6 +6,7 @@ Agent skills for everyday engineering work. They are generic: each project descr
 |---|---|
 | `investigating-issues` | Find the root cause of a bug with code evidence, check every layer and repo for the same pattern, and open linked issues |
 | `resolving-issues` | Fix an issue and every issue linked to it, test-first, one PR per repo |
+| `reviewing-prs` | Review a PR against its linked issues and the project rules until it is ready to merge; findings and questions are tracked in one comment on the PR |
 | `writing-release-notes` | Draft a GitHub release per repo, plus a plain-language page for stakeholders |
 | `aligning-translations` | Check locale parity, fix missing or untranslated keys, add a language |
 | `testing-web-visually` | Sweep a locally running web app with Playwright across roles, locales and screen sizes; review the screenshots |
@@ -59,6 +60,7 @@ Type the slash command, or describe the task in words; the agent picks the skill
 |---|---|---|
 | investigating-issues | `/cleverways:investigating-issues` then the report, screenshots, or `#123` | One issue per affected repo, cross-linked, with pinned code citations. No code changes. |
 | resolving-issues | `/cleverways:resolving-issues #123` | A failing test, then the fix, the checks run, and one PR per repo. Nothing is merged. |
+| reviewing-prs | `/cleverways:reviewing-prs #568` | A verdict (READY TO MERGE / NEEDS FIXES / BLOCKED ON), inline comments for new findings, and a tracking comment updated each round. Re-running after new commits reviews only the new commits; it never merges. |
 | writing-release-notes | `/cleverways:writing-release-notes since the last promotion` | Draft GitHub releases (changes, for testers, for devops) and a stakeholder page. |
 | aligning-translations | `/cleverways:aligning-translations` or "add French" | A parity table per repo and locale, then the fixes. |
 | testing-web-visually | `/cleverways:testing-web-visually the declined screens` | Screenshots per role, locale and size, automatic checks, a visual review, and `visual-test` issues. Local stack only. |
