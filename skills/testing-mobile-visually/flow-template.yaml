@@ -1,21 +1,39 @@
 # Visual check for one screen. mobile-sweep.mjs runs it once per locale with
 # APP_ID and LOCALE set, inside the output folder, so screenshots land there.
-# Shared steps (language, login) live in subflows/, which the sweep does not run directly.
+# Shared steps live in subflows/, which the sweep does not run directly:
+#   subflows/start.yaml         launch, (dev client) open the app, sign in, set language
+#   subflows/login.yaml         seeded local login
+#   subflows/set-language.yaml  switch to LOCALE in the app's own settings
 appId: ${APP_ID}
 ---
-- launchApp:
-    clearState: true
-- runFlow:
-    file: subflows/set-language.yaml
-    env:
-      LOCALE: ${LOCALE}
-- runFlow: subflows/login.yaml
-# Prefer testID / accessibility id selectors; use visible text only when a screen has none.
-- tapOn:
-    id: "tab-insights"
-- assertVisible:
-    id: "insights-screen"
-- takeScreenshot: insights-${LOCALE}
+- runFlow: subflows/start.yaml
+# Prefer testID / accessibility id selectors. Without them, match visible text in
+# every locale with a regex built from the locale files: "Home|الرئيسية|ہوم".
+- tapOn: "Insights|رؤى|بصیرت"
+- waitForAnimationToEnd
+- takeScreenshot: insights-${LOCALE}-1
 # For long screens, scroll and capture again.
 - scroll
 - takeScreenshot: insights-${LOCALE}-2
+
+# --- subflows/start.yaml for an Expo dev-client build (adapt for other apps) ---
+# appId: ${APP_ID}
+# env:
+#   DEV_SERVER: http://10.0.2.2:8081
+# ---
+# - launchApp:
+#     clearState: true
+# - tapOn: ${DEV_SERVER}                 # the Metro server in the dev-client launcher
+# - extendedWaitUntil:
+#     visible: "Continue|<first screen text>"
+#     timeout: 180000                    # the first bundle is slow
+# - tapOn: { text: "Continue", optional: true }
+# - runFlow:                             # close the developer menu if it stayed open
+#     when: { visible: "Performance monitor" }
+#     commands: [ { pressKey: back } ]
+# - repeat:                              # step through first-run onboarding
+#     while: { notVisible: "<sign-in screen text>" }
+#     times: 6
+#     commands: [ { tapOn: { text: "Continue|Get Started|Next|Skip", optional: true } } ]
+# - runFlow: login.yaml
+# - runFlow: set-language.yaml
