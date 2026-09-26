@@ -6,6 +6,7 @@
 // Usage:
 //   node review-state.mjs get <pr> [--repo owner/repo]                 prints { commentId, state }
 //   node review-state.mjs issues <pr> [--repo owner/repo]              prints linked issue numbers
+//   node review-state.mjs resolve <pr> [--repo owner/repo]             resolves inline threads of fixed findings
 //   node review-state.mjs put <pr> --file state.json [--repo owner/repo] [--dry]  creates or updates the comment (--dry prints it)
 //
 // State: { pr, round, reviewedSha, issues: [n], verdict, blockedOn,
@@ -21,7 +22,7 @@ import { join } from 'node:path';
 const MARK = '<!-- cleverways:pr-review -->';
 const [cmd, pr, ...rest] = process.argv.slice(2);
 const opt = (name) => { const i = rest.indexOf(`--${name}`); return i === -1 ? null : rest[i + 1]; };
-if (!['get', 'put', 'issues'].includes(cmd) || !pr) {
+if (!['get', 'put', 'issues', 'resolve'].includes(cmd) || !pr) {
   console.error('Usage: review-state.mjs get|put <pr> [--file state.json] [--repo owner/repo]');
   process.exit(2);
 }
@@ -58,7 +59,44 @@ function render(s) {
   ].join('\n');
 }
 
-if (cmd === 'issues') {
+if (cmd === 'resolve') {
+  // Tidies the PR after a round, so the conversation shows only what is still open:
+  //  - resolves the inline thread of every finding that is `fixed` or `invalid`
+  //    (a thread belongs to a finding when its first comment starts with "**R<n> ·");
+  //  - hides review bodies from earlier rounds as OUTDATED ("<!-- cleverways:review-round:<n> -->");
+  //  - once no finding is open, hides every round review and every fix note
+  //    ("<!-- cleverways:fix-note -->") as RESOLVED. The tracker comment is never hidden.
+  const [owner, name] = repo.split('/');
+  const q = 'query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){'
+    + 'reviewThreads(first:100){nodes{id isResolved comments(first:1){nodes{body}}}} '
+    + 'reviews(first:100){nodes{id isMinimized body}} comments(first:100){nodes{id isMinimized body}}}}}';
+  const p = JSON.parse(gh(['api', 'graphql', '-f', `query=${q}`, '-F', `o=${owner}`, '-F', `r=${name}`, '-F', `n=${pr}`])).data.repository.pullRequest;
+  const { state } = find();
+  const done = new Set(state.findings.filter((f) => ['fixed', 'invalid'].includes(f.status)).map((f) => f.id));
+  const allDone = state.findings.every((f) => f.status !== 'open');
+  const run = (mutation, id) => gh(['api', 'graphql', '-f', `query=${mutation}`, '-F', `s=${id}`]);
+  const hide = (id, why) => run(`mutation($s:ID!){minimizeComment(input:{subjectId:$s,classifier:${why}}){minimizedComment{isMinimized}}}`, id);
+
+  for (const t of p.reviewThreads.nodes) {
+    const id = t.comments.nodes[0]?.body.match(/^\*\*(R\d+) ·/)?.[1];
+    if (!id || t.isResolved || !done.has(id)) continue;
+    run('mutation($s:ID!){resolveReviewThread(input:{threadId:$s}){thread{isResolved}}}', t.id);
+    console.log(`resolved thread ${id}`);
+  }
+  for (const r of p.reviews.nodes) {
+    const round = Number(r.body?.match(/<!-- cleverways:review-round:(\d+) -->/)?.[1]);
+    if (!round || r.isMinimized) continue;
+    if (allDone) { hide(r.id, 'RESOLVED'); console.log(`hid round ${round} review (resolved)`); }
+    else if (round < state.round) { hide(r.id, 'OUTDATED'); console.log(`hid round ${round} review (outdated)`); }
+  }
+  if (allDone) {
+    for (const c of p.comments.nodes) {
+      if (c.isMinimized || !c.body?.includes('<!-- cleverways:fix-note -->')) continue;
+      hide(c.id, 'RESOLVED');
+      console.log('hid fix note');
+    }
+  }
+} else if (cmd === 'issues') {
   // Linked issues: GitHub's closing references (GraphQL; not every gh version exposes them
   // in `gh pr view --json`) plus any #n written in the PR body.
   const [owner, name] = repo.split('/');

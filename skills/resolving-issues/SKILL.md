@@ -25,7 +25,7 @@ Linked issues are one change. Fix all of them in the same session, in the order 
 5. **Verify.** Run the profile's commands for every area you touched (typecheck, lint, tests, guardrails, translation check). Paste the real output. A failing command means the work is not done.
 6. **Check the UI.** For a visible change, run the testing-web-visually or testing-mobile-visually skill with `--only` set to the changed screens, covering each text direction and a phone-width screen.
 7. **PR.** Open one PR per repo, on the profile's base branch and stacking rule. The body links the issue, lists the linked PRs with their merge order, says what changed, and includes the test output.
-   - **Addressing review:** push to the same PR instead. Reply to each fixed finding's inline comment with `Fixed in <sha>: <one line>`, or give the reason it is not being fixed.
+   - **Addressing review:** push to the same PR instead. Reply to each fixed finding's inline comment with `Fixed in <sha>: <one line>`, or give the reason it is not being fixed. Findings without an inline comment get one PR comment that starts with `<!-- cleverways:fix-note -->` and lists `R<n>: Fixed in <sha>: <one line>`. Leave threads unresolved; the reviewer resolves them once the fix is verified.
 8. **Report.** Comment on each issue with the PR link, what changed, the test results and anything left open.
 9. **Hand to review.** Run the reviewing-prs skill on each PR. The new commit starts its next round. Merge only when the user asks. Issues close after merge (reviewing-prs and verifying-fixes do that).
 
