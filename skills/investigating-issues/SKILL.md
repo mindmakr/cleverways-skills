@@ -19,7 +19,20 @@ This skill changes no code.
 4. **Sweep.** Search for the same pattern (the same field, query shape or helper) in every layer and every repo the profile lists. Record each hit as ✅ correct, ❌ affected or n/a, with `path:line`. Cover labels, layout and display, and any client that computes what the profile says the server owns.
 5. **Plan the fix.** Fix it in the layer that owns the logic, with one shared helper when several sites need the same rule. For each file, say what changes. A contract change that a separately released client reads must be additive. Add translations for every locale in the profile, tests that use the figures from step 2, and an acceptance checklist.
 6. **Log it.** Open one issue per affected repo using `issue-template.md` from this skill's folder, with the title prefix and labels from the profile. When more than one repo is affected, each issue opens with the template's linked-issues note and links the others.
-7. **Reply.** Give the issue links, the root cause in one or two lines, the affected surfaces, any open decisions, and what you did not check.
+7. **Reply.** Use the reply shape below.
+
+## Output
+
+The issue body contains only the template sections. Each finding takes one line or one table row, and prose runs to three sentences at most per section. Do not restate the report and do not narrate what you searched.
+
+Keep the reply to the user to eight lines or fewer, in this order:
+1. Issue links, or "updated #N".
+2. Root cause: one line with `path:line`.
+3. Affected surfaces: one line.
+4. Any question for the user, with options.
+5. Not checked: one line.
+
+Leave out preamble, recaps and offers.
 
 ## Stop and verify
 

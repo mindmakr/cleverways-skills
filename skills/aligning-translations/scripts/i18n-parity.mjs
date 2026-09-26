@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Compares every <locale>.json in a directory against a base locale.
-// Errors (exit 1): missing keys, extra keys, empty values.
+// Errors (exit 1): missing keys, extra keys, empty values, wrong syntax for the
+// file's format (ICU in an i18next file, or {{var}} in an ICU file).
 // Warnings: placeholder mismatch, value identical to the base (possibly untranslated).
 //
 // Usage: node i18n-parity.mjs <dir> [<dir> ...] [--base en] [--json]
@@ -53,14 +54,20 @@ function checkDir(dir) {
   const baseFile = `${base}.json`;
   if (!files.includes(baseFile)) throw new Error(`${dir}: no ${baseFile}`);
   const baseMap = load(baseFile);
+  // The base locale decides the syntax: any {{var}} means i18next, otherwise ICU.
+  const i18next = [...baseMap.values()].some((v) => typeof v === 'string' && v.includes('{{'));
+  const wrongSyntax = (v) => typeof v === 'string' && (i18next
+    ? /\{\s*\w+\s*,\s*(plural|select)/.test(v) || /(^|[^{])\{\s*[A-Za-z_]\w*\s*\}(?!\})/.test(v)
+    : v.includes('{{'));
 
   return files.filter((f) => f !== baseFile).map((f) => {
     const map = load(f);
-    const r = { dir, locale: basename(f, '.json'), missing: [], extra: [], empty: [], placeholder: [], sameAsBase: [] };
+    const r = { dir, locale: basename(f, '.json'), missing: [], extra: [], empty: [], syntax: [], placeholder: [], sameAsBase: [] };
     for (const [key, baseValue] of baseMap) {
       if (!map.has(key)) { r.missing.push(key); continue; }
       const value = map.get(key);
       if (value === '' || value === null) r.empty.push(key);
+      else if (wrongSyntax(value)) r.syntax.push(key);
       else if (placeholders(value) !== placeholders(baseValue)) r.placeholder.push(key);
       else if (typeof value === 'string' && value === baseValue && /[A-Za-z]{3,}/.test(value)) r.sameAsBase.push(key);
     }
@@ -70,14 +77,14 @@ function checkDir(dir) {
 }
 
 const results = dirs.flatMap(checkDir);
-const failed = results.some((r) => r.missing.length || r.extra.length || r.empty.length);
+const failed = results.some((r) => r.missing.length || r.extra.length || r.empty.length || r.syntax.length);
 
 if (json) {
   console.log(JSON.stringify(results, null, 2));
 } else {
   for (const r of results) {
     console.log(`\n${r.dir} · ${r.locale} vs ${base}`);
-    for (const kind of ['missing', 'extra', 'empty', 'placeholder', 'sameAsBase']) {
+    for (const kind of ['missing', 'extra', 'empty', 'syntax', 'placeholder', 'sameAsBase']) {
       const keys = r[kind];
       console.log(`  ${kind.padEnd(12)} ${keys.length}`);
       for (const k of keys.slice(0, 20)) console.log(`    ${k}`);

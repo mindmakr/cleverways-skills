@@ -56,6 +56,10 @@ Shared: <path to another repo's profile, or delete this line>
 - Tags: <format>
 - Notes go to: <GitHub release per repo + stakeholder page>
 - Stakeholder audience: <who>, exclude: <implementation detail, PR numbers>
+- Environments: <names, which branch deploys where, who owns env files, where env vars are documented>
+- Deploy order: <e.g. migrations, backend, web, mobile>
+- Testers: <where test accounts come from, which locales and sizes to check>
+- Rollback: <how to redeploy the previous version, and whether migrations are reversible>
 
 ## Terms
 

@@ -20,6 +20,16 @@ Linked issues are one change. Fix all of them in the same session, in the order 
 7. **PR.** Open one PR per repo, on the profile's base branch and stacking rule. The body links the issue, lists the linked PRs with their merge order, says what changed, and includes the test output.
 8. **Report.** Comment on each issue with the PR link, what changed, the test results and anything left open. Merge only when the user asks. Close issues by the profile's rule.
 
+## Output
+
+Keep each PR body and issue comment to these parts:
+- **Changed:** up to five bullets, one line each, with `path`.
+- **Tests:** the command and its pass/fail line, verbatim.
+- **Linked:** the other PRs and their merge order.
+- **Open:** anything left undone, or "none".
+
+Keep the reply to the user to six lines or fewer: PR links, one line on what changed, test status, and open items or questions. Leave out preamble, recaps and offers.
+
 ## Stop and verify
 
 | Thought | Do instead |
