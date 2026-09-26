@@ -33,6 +33,28 @@ node cleverways-skills/scripts/install-agents.mjs
 
 This copies the skills into `~/.agents/skills`. Use `--target <dir>` for an agent that reads a different folder. Re-run it after `git pull`.
 
+## Before you start
+
+- `gh` CLI signed in with access to every repo the profile lists: `gh auth login`, then `gh auth setup-git`.
+- Related repos cloned side by side, at the local paths the profile gives, so skills can search them.
+- Node 18 or later, for the translation script.
+
+## Use
+
+Type the slash command, or describe the task in words; the agent picks the skill from its description.
+
+| Skill | Say | You get |
+|---|---|---|
+| investigating-issues | `/cleverways:investigating-issues` then the report, screenshots, or `#123` | One issue per affected repo, cross-linked, with pinned code citations. No code changes. |
+| resolving-issues | `/cleverways:resolving-issues #123` | A failing test, then the fix, the checks run, and one PR per repo. Nothing is merged. |
+| writing-release-notes | `/cleverways:writing-release-notes since the last promotion` | Draft GitHub releases (changes, for testers, for devops) and a stakeholder page. |
+| aligning-translations | `/cleverways:aligning-translations` or "add French" | A parity table per repo and locale, then the fixes. |
+| project-profile | "set up the project profile" | `.agents/project-profile.md`, filled from the repo plus your answers. |
+
+Other agents: name the skill in plain words, for example "use the investigating-issues skill on this report".
+
+When a skill needs a decision, it asks one question with options and a recommendation. Answer it, and the skill carries on.
+
 ## Set up a project
 
 Ask your agent: "set up the project profile". The `project-profile` skill fills `.agents/project-profile.md` from the repo and asks about anything the repo can't answer. Commit the file.
