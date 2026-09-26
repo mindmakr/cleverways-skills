@@ -12,9 +12,9 @@ Agent skills for everyday engineering work. They are generic: each project descr
 | `planning-refactors` | Plan an improvement that leaves behaviour unchanged: behaviour lock first, measured before and after |
 | `planning-work` | The shared steps the planning skills use: investigate, draft, confirm once, create on GitHub |
 | `verifying-fixes` | Check a fixed issue's acceptance items with evidence, then close or reopen it |
-| `reviewing-prs` | Review a PR against its linked issues and the project rules until it is ready to merge; findings and questions are tracked in one comment on the PR |
+| `reviewing-prs` | Review a PR against its linked issues and the project rules until it is ready to merge; findings and questions are tracked in one comment on the PR. Every round runs a local security scan (gitleaks, Semgrep, osv-scanner through Docker) on what the PR adds |
 | `writing-release-notes` | Draft a GitHub release per repo, plus a plain-language page for stakeholders |
-| `setting-up-project-tracking` | One GitHub Project across the repos: sprints, a Release field, and scrum, backlog, roadmap, release-notes and bug-triage views |
+| `setting-up-project-tracking` | One GitHub Project across the repos: sprints, a Release field, and scrum, backlog, roadmap, release-notes, bug-triage and pull-request views. Its `board.mjs` keeps the board live: every skill moves cards as it acts, and `sync` repairs hand-made drift |
 | `managing-translations` | Check locale parity, fix missing or untranslated keys, add a language |
 | `testing-web-visually` | Sweep a locally running web app with Playwright across roles, locales and screen sizes; review the screenshots |
 | `testing-mobile-visually` | Sweep a mobile app (Expo, React Native, Flutter, native) on a local emulator with Maestro |
@@ -32,7 +32,7 @@ review          reviewing-prs                                               → 
 fix review      fixing-issues #<pr>                                      → open findings fixed on the same branch, replies, next round
 verify          verifying-fixes                                             → acceptance items checked with evidence → close or reopen
 test            testing-web-visually / testing-mobile-visually              → screenshots → reporting-visual-defects → visual-test issues
-track           setting-up-project-tracking                                 → one board: sprints, Release field, five views
+track           setting-up-project-tracking                                 → one board: sprints, Release field, six views; board.mjs sync keeps it live
 ship            writing-release-notes                                       → GitHub releases (changes, testers, devops) + stakeholder page
 always          project-profile, writing-plainly, managing-translations
 ```
@@ -54,6 +54,10 @@ always          project-profile, writing-plainly, managing-translations
 3. The reviewer verifies each fix, resolves that finding's thread, and hides superseded round reviews and fix notes, so the PR shows only what is still open. Repeat until READY TO MERGE. A round that changes nothing stops the loop as "stalled", naming the owner of each open item. At most three rounds run per session.
 4. A person merges. The next `reviewing-prs` run sees the merge, closes the linked issues and marks the tracker MERGED.
 5. `verifying-fixes #<issue>` confirms each acceptance item with evidence.
+
+### The board follows the work
+
+With a board in the profile, each skill moves its card as it acts: filed → Backlog, planned → Ready, fix started → In progress (assigned, current sprint), PR opened → In review, review passed on the latest commit → Ready to merge (a new commit sends it back to In review), merged → On test (the issue is closed by the profile's rule), verified → Done, or back to Ready on a failure. Open PRs sit on the board too, in the same columns. Issue cards show their PRs in a "Pull request" field, because GitHub leaves "Linked pull requests" empty for PRs into a branch other than the default. Work found out of scope becomes a follow-up issue with a priority, under the same parent. `board.mjs sync` catches what people changed by hand.
 
 ## Install
 
@@ -108,7 +112,7 @@ Type the slash command, or describe the task in words; the agent picks the skill
 | managing-translations | `/cleverways:managing-translations` or "add French" | A parity table per repo and locale, then the fixes. |
 | testing-web-visually | `/cleverways:testing-web-visually the declined screens` | Screenshots per role, locale and size, automatic checks, a visual review, and `visual-test` issues. Local stack only. |
 | testing-mobile-visually | `/cleverways:testing-mobile-visually` | The same for the app, on a local emulator. |
-| setting-up-project-tracking | `/cleverways:setting-up-project-tracking` | A GitHub Project across the profile's repos with sprints, a Release field and five views, the open issues on it, and a release-notes config PR per repo. |
+| setting-up-project-tracking | `/cleverways:setting-up-project-tracking` | A GitHub Project across the profile's repos with sprints, a Release field and six views, the open issues and PRs on it, and a release-notes config PR per repo. "Sync the board" brings an existing board up to date. |
 | project-profile | "set up the project profile" | `.agents/project-profile.md`, filled from the repo plus your answers. |
 
 Other agents: name the skill in plain words, for example "use the investigating-issues skill on this report".

@@ -12,22 +12,24 @@ The goal is a merge verdict backed by evidence: the PR fully covers its linked i
 ## One round
 
 1. **Load.** Run `review-state.mjs get <pr>` and `review-state.mjs issues <pr>`. Also run `gh pr view <pr> --json state,mergeCommit,headRefOid,body,files,baseRefName`.
-   - **Merged:** set the verdict to `MERGED`, close the linked issues by the profile's rule (a comment naming the PR and merge commit), update the tracker, and stop.
-   - **Closed without merging:** set the verdict to `CLOSED`, update the tracker, and stop.
+   - **Merged:** set the verdict to `MERGED`, close the linked issues by the profile's rule (a comment naming the PR and merge commit), run `board.mjs set <issue refs> --status "On test"` and `board.mjs set <pr url> --status Done` (the setting-up-project-tracking skill's script), update the tracker, and stop.
+   - **Closed without merging:** set the verdict to `CLOSED`, move the PR to Done and its issues back to Ready on the board, update the tracker, and stop.
    - **Replies:** read the replies to your inline comments (`gh api repos/<repo>/pulls/<pr>/comments`). "Fixed in <sha>" is checked in step 4. A disagreement becomes a question for the user in step 5.
+   - **Other reviewers:** read every review and inline comment by others (people, Copilot, security bots) and every failing check. Each claim is a candidate for step 4, verified like your own and credited to its author. Never repeat one as a finding without checking it.
    - If `headRefOid` equals the state's `reviewedSha`, nothing new has been pushed. Report the current state and stop. Re-reviewing the same commit is the loop to avoid.
 2. **Scope.** The linked issues are those `issues` printed; their acceptance checklists are the coverage goal. Take linked PRs in other repos from the issues.
    - When the PR links no issue, the PR description is the goal: turn its claims into checklist items. In the first round, ask once whether that is the full scope.
    - The range is `reviewedSha..head` when `reviewedSha` is an ancestor of head (`git merge-base --is-ancestor`), otherwise the whole PR.
 3. **Review, in parallel where the agent can:**
    - **Correctness.** In Claude Code, run the `code-review` skill on the PR at level `high`. Elsewhere, read the diff for defects.
+   - **Security.** Run `node ${CLAUDE_SKILL_DIR}/scripts/security-scan.mjs --pr <pr>` from the repo. With Docker it runs gitleaks, Semgrep and osv-scanner on what the PR adds only (the header lists the rules), in under a minute, whether or not CI can run. Exit 3 (no Docker) or 4 (a scan failed) goes under "not reviewed". Also run the `security-review` skill in Claude Code, or elsewhere read the diff for injection, missing authorisation or tenant scoping, and unsafe input handling. Each result is a candidate for step 4; a confirmed security finding is at least high.
    - **Project reviewer.** Give a subagent `reviewer-brief.md` from this skill's folder, plus the PR, the range, the issues and the open findings. It returns coverage, earlier-finding status, candidate findings and questions, as JSON.
 4. **Verify.** Keep a candidate only when you can open its file and see the quoted line at head, and the reason holds. A candidate that depends on intent becomes a question. Drop duplicates by fingerprint: `path:symbol:problem`.
 5. **Ask.** Ask the user the round's open questions together, at most four, each with options and your recommendation (AskUserQuestion in Claude Code). Record each answer in the state. A question once answered is never asked again. If the user is not available, mark the question open and set `blockedOn` to the user.
 6. **Update the state.**
    - New findings get the next `R<n>` id, `status: open` and this round's number.
    - Earlier findings move to `fixed` only with evidence.
-   - `wontfix` needs the user's decision recorded as a question.
+   - `wontfix` needs the user's decision recorded as a question. A finding the user defers ("later", "out of scope") is filed as a follow-up issue by the investigating-issues skill's Follow-ups rule, and the tracker row links it.
    - An answer that asks for a change becomes a finding and cites the question ("decided (Q2)").
    - Set `round + 1` and `reviewedSha = head`.
 7. **Post.**
@@ -37,8 +39,8 @@ The goal is a merge verdict backed by evidence: the PR fully covers its linked i
    - Run `review-state.mjs resolve <pr>`. It resolves the inline thread of each finding now `fixed`, hides earlier round reviews as outdated, and once nothing is open, hides earlier round reviews and fix notes as resolved. The latest round review and the tracker stay visible. The conversation then shows only what is still open, plus the tracker.
    - Never approve, request changes or merge.
 8. **Verdict**, which is also the tracking comment's heading:
-   - **READY TO MERGE:** every acceptance item is covered with evidence, no open finding is medium or higher, there are no open questions, `gh pr checks` is green, and linked PRs are aligned.
-   - **NEEDS FIXES:** any open finding or missing coverage.
+   - **READY TO MERGE:** every acceptance item is covered with evidence, no open finding is medium or higher, there are no open questions, `gh pr checks` is green, and linked PRs are aligned. Run `board.mjs set <pr url> <issue refs> --status "Ready to merge"` (the setting-up-project-tracking skill's script) so someone picks up the merge.
+   - **NEEDS FIXES:** any open finding or missing coverage. If the PR was Ready to merge on the board, move it and its issues back to In review.
    - **BLOCKED ON <who>:** the next step belongs to someone else.
 
 ## Loop control

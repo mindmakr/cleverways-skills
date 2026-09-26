@@ -26,8 +26,8 @@ An issue is done when every acceptance item has passed, each with evidence, on t
    | <acceptance text> | test / visual / manual | pass / fail | <test line, screenshot link, or the user's confirmation> |
 
 5. **Conclude.**
-   - **All pass:** tick the checklist and close the issue by the profile's rule, naming the PR and merge commit.
-   - **Any fail:** keep the issue open, or reopen it. Name the failing item and its evidence, and link the PR. A new defect that the fix did not cause becomes a new issue, via the investigating-issues skill.
+   - **All pass:** tick the checklist, close the issue by the profile's rule if it is still open, naming the PR and merge commit, and run `board.mjs set <ref> --status Done` (the setting-up-project-tracking skill's script). When it was its parent's last open sub-issue, verify the parent's "Done when" the same way, then tick, close and move the parent to Done.
+   - **Any fail:** keep the issue open, or reopen it, and move it to Ready on the board. Name the failing item and its evidence, and link the PR. A new defect that the fix did not cause becomes a follow-up issue, by the investigating-issues skill's Follow-ups rule.
 6. **Reply** in five lines or fewer: the verdict per issue, links, and anything that is waiting on a person.
 
 ## Stop

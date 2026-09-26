@@ -51,6 +51,7 @@ Shared: <path to another repo's profile, or delete this line>
 - PR base branch: <branch>
 - Branch from: <base, or the previous PR's branch when stacking>
 - Never: <push to deploy branches, merge without an ask>
+- Reviewers: <GitHub handles asked to review every PR; the PR's author is skipped>
 - Issues close when: <merged into which branch, by whom>
 
 ## Issues
@@ -71,8 +72,8 @@ Shared: <path to another repo's profile, or delete this line>
 
 ## Tracking
 
-- Board: <GitHub Project URL>, one board for every repo above
-- Platform per repo: <repo → Backend / Web / Mobile>
+- Board: <https://github.com/users|orgs/<owner>/projects/<n>>, one board for every repo above
+- Platform per repo: <repo> → <Backend / Web / Mobile>, <repo> → <…>. Write "<A> or <B> (by layer)" for a repo that holds two, and the board script leaves Platform to the caller
 - Releases: Release field values <v1.0.0, v1.1.0>. Milestones are epics (planning-epics)
 - Sprints: <N days, starting <day>, Sprint 1 from YYYY-MM-DD> or kanban
 

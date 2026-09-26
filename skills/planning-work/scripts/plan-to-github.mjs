@@ -10,14 +10,19 @@
 //   "milestone": { "title": "…", "description": "…", "due_on": "2026-10-31T00:00:00Z" } | null,
 //   "parent": { "key": "P", "repo": "owner/repo", "title": "…", "body": "…", "labels": ["epic"] }
 //          | { "key": "P", "repo": "owner/repo", "number": 123 },
-//   "items": [ { "key": "T1", "repo": "owner/repo", "title": "…", "body": "…", "labels": ["task"], "parent": "P" } ]
+//   "items": [ { "key": "T1", "repo": "owner/repo", "title": "…", "body": "…", "labels": ["task"], "parent": "P",
+//                "size": "S", "platform": "Web", "depends": ["T0"] } ],
+//   "release": "v1.1.0"
 // }
 // Bodies may reference other entries as {{T1}}; they become owner/repo#n after creation.
+// When the profile names a board, every issue goes on it: tasks with nothing in "depends" are
+// Ready, the rest Backlog, with their Size, Platform, priority label and the plan's Release.
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { openBoard, readProfile, setItems } from '../../setting-up-project-tracking/scripts/board.mjs';
 
 const argv = process.argv.slice(2);
 const planPath = argv[argv.indexOf('--plan') + 1];
@@ -33,7 +38,8 @@ const api = (args) => JSON.parse(gh(['api', ...args]) || 'null');
 if (dry) {
   const repos = [...new Set(entries.map((e) => e.repo))];
   console.log(`Milestone: ${plan.milestone?.title ?? '(none)'} in ${repos.join(', ')}`);
-  for (const e of entries) console.log(`${e.key.padEnd(5)} ${e.repo} ${e.number ? `#${e.number} (existing)` : e.title}  [${(e.labels ?? []).join(', ')}]${e.parent ? `  ← sub-issue of ${e.parent}` : ''}`);
+  for (const e of entries) console.log(`${e.key.padEnd(5)} ${e.repo} ${e.number ? `#${e.number} (existing)` : e.title}  [${(e.labels ?? []).join(', ')}]${e.parent ? `  ← sub-issue of ${e.parent}` : ''}${e.size ? `  ${e.size}` : ''}${e.depends?.length ? `  after ${e.depends.join(', ')}` : ''}`);
+  console.log(`Board: ${readProfile().board ?? '(none in the profile)'}${plan.release ? `, Release ${plan.release}` : ''}`);
   process.exit(0);
 }
 
@@ -91,6 +97,17 @@ for (const e of entries.filter((x) => x.parent)) {
   const p = made[e.parent];
   const existing = api(['--paginate', '--slurp', `repos/${p.repo}/issues/${p.number}/sub_issues?per_page=100`]).flat().map((s) => s.id);
   if (!existing.includes(made[e.key].id)) api(['-X', 'POST', `repos/${p.repo}/issues/${p.number}/sub_issues`, '-F', `sub_issue_id=${made[e.key].id}`]);
+}
+
+// 6. The board.
+const profile = readProfile();
+if (profile.board) {
+  const board = openBoard(profile.board);
+  for (const e of entries)
+    setItems(board, profile, [made[e.key].url], {
+      status: e !== plan.parent && !e.depends?.length ? 'Ready' : 'Backlog',
+      size: e.size, platform: e.platform, release: plan.release,
+    });
 }
 
 for (const [key, m] of Object.entries(made)) console.log(`${key}\t${m.how}\t${m.url}`);
