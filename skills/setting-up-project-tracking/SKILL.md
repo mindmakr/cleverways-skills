@@ -44,6 +44,7 @@ Every skill moves the board at the moment it acts, with `board.mjs` (from anothe
 | Plan created | planning-work | Size, Platform; Ready when nothing it depends on is open, else Backlog |
 | Work starts | fixing-issues | In progress, current sprint, assignee; the parent follows |
 | PR opened | fixing-issues | issue In review; the PR on the board, In review, with no sprint |
+| Review passed | reviewing-prs | issue and PR Ready to merge, until a new commit lands |
 | PR merged | reviewing-prs | issue closed by the profile's rule, On test; the PR Done |
 | Verified | verifying-fixes | Done, or reopened and Ready |
 | Release drafted | writing-release-notes | Release set on every shipped issue |
@@ -54,7 +55,7 @@ Every skill moves the board at the moment it acts, with `board.mjs` (from anothe
 
 | Piece | Detail |
 |---|---|
-| Status | Backlog → Ready → In progress → In review → On test → Done (new project only) |
+| Status | Backlog → Ready → In progress → In review → Ready to merge → On test → Done (new project only) |
 | Fields | Platform, Priority (from labels), Size, Start, Target, Release, Sprint; Pull request and Fixes, written by `board.mjs sync` |
 | Items | Open issues not yet on the board; existing items are left alone |
 | Views | Scrum board · current sprint (Status columns, Platform lanes, Pull request on cards), Backlog (by Release), Roadmap (by Milestone), Release notes (On test + Done, by Release), Bug triage (by Priority), Pull requests (open PRs, by repo) |

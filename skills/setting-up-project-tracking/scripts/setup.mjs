@@ -103,6 +103,7 @@ if (isNew) {
   const status = [
     ['Backlog', 'GRAY', 'Not yet ready to pick up'], ['Ready', 'BLUE', 'Understood and sized; can start'],
     ['In progress', 'YELLOW', 'Someone is working on it'], ['In review', 'PURPLE', 'Pull request open'],
+    ['Ready to merge', 'PINK', 'Review passed; waiting for someone to merge'],
     ['On test', 'ORANGE', 'Merged; awaiting verification'], ['Done', 'GREEN', 'Verified'],
   ].map(([name, color, description]) => `{name:"${name}",color:${color},description:"${description}"}`).join(',');
   gql(`mutation{updateProjectV2Field(input:{fieldId:"${field('Status').id}",singleSelectOptions:[${status}]}){projectV2Field{... on ProjectV2SingleSelectField{id}}}}`);

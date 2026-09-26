@@ -39,8 +39,8 @@ The goal is a merge verdict backed by evidence: the PR fully covers its linked i
    - Run `review-state.mjs resolve <pr>`. It resolves the inline thread of each finding now `fixed`, hides earlier round reviews as outdated, and once nothing is open, hides earlier round reviews and fix notes as resolved. The latest round review and the tracker stay visible. The conversation then shows only what is still open, plus the tracker.
    - Never approve, request changes or merge.
 8. **Verdict**, which is also the tracking comment's heading:
-   - **READY TO MERGE:** every acceptance item is covered with evidence, no open finding is medium or higher, there are no open questions, `gh pr checks` is green, and linked PRs are aligned.
-   - **NEEDS FIXES:** any open finding or missing coverage.
+   - **READY TO MERGE:** every acceptance item is covered with evidence, no open finding is medium or higher, there are no open questions, `gh pr checks` is green, and linked PRs are aligned. Run `board.mjs set <pr url> <issue refs> --status "Ready to merge"` (the setting-up-project-tracking skill's script) so someone picks up the merge.
+   - **NEEDS FIXES:** any open finding or missing coverage. If the PR was Ready to merge on the board, move it and its issues back to In review.
    - **BLOCKED ON <who>:** the next step belongs to someone else.
 
 ## Loop control

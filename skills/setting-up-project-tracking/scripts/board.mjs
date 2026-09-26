@@ -20,7 +20,8 @@
 // the keywords from PR bodies itself (Fixes / Closes / Resolves / Refs / Part of <ref>) and
 // writes the link into two text fields it creates when missing: "Pull request" on each issue
 // (e.g. "#575 open · #48 merged") and "Fixes" on each PR. Open PRs go on the board as their own
-// items, In review, with no Sprint, so the sprint board shows only issues.
+// items, In review, with no Sprint, so the sprint board shows only issues. A PR approved on its
+// latest commit, or given READY TO MERGE by reviewing-prs on it, moves to Ready to merge with its issues.
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
@@ -207,14 +208,27 @@ export function sync(board, profile, { dry = false, closeMerged = false } = {}) 
   const links = hasPr && hasFixes;
   if (!links) changes.push('create text fields "Pull request" and "Fixes"');
   const shortIn = (url, repo) => short(url).replace(`${repo}#`, '#');
+  // "Ready to merge" when the board has that column and the PR's latest head is approved, or
+  // carries a cleverways review tracker whose READY TO MERGE verdict was given on that head.
+  const hasReady = board.field('Status')?.options?.some((o) => o.name === 'Ready to merge');
+  const readyToMerge = (repo, pr) => {
+    if (!hasReady || pr.isDraft || pr.reviewDecision === 'CHANGES_REQUESTED') return false;
+    if (pr.reviewDecision === 'APPROVED') return true;
+    const comments = JSON.parse(gh(['api', '--paginate', '--slurp', `repos/${repo}/issues/${pr.number}/comments`])).flat();
+    const json = comments.find((x) => x.body?.includes('<!-- cleverways:pr-review -->'))?.body.match(/<!-- state\n([\s\S]*?)\n-->/)?.[1];
+    const state = json ? JSON.parse(json) : null;
+    return Boolean(state?.verdict?.startsWith('READY TO MERGE') && state.reviewedSha === pr.headRefOid);
+  };
   for (const repo of profile.repos) {
-    for (const pr of JSON.parse(gh(['pr', 'list', '-R', repo, '-s', 'open', '-L', '200', ...base, '--json', 'url,body,isDraft,reviewRequests,latestReviews']))) {
+    for (const pr of JSON.parse(gh(['pr', 'list', '-R', repo, '-s', 'open', '-L', '200', ...base, '--json', 'url,number,body,isDraft,reviewRequests,latestReviews,reviewDecision,headRefOid']))) {
       const refs = prRefs(pr, repo);
+      pr.ready = readyToMerge(repo, pr);
       for (const u of refs) push(openPR, u, pr);
       const it = board.items.get(pr.url), fixes = refs.map((u) => shortIn(u, repo)).join(' · ');
-      if (!it) act(`${short(pr.url)}: add PR to the board (In review)`, () => set(pr.url, { status: 'In review', fixesText: fixes }));
+      const want = pr.ready ? 'Ready to merge' : 'In review';
+      if (!it) act(`${short(pr.url)}: add PR to the board (${want})`, () => set(pr.url, { status: want, fixesText: fixes }));
       else {
-        if (it.status?.name !== 'In review') act(`${short(pr.url)}: PR ${it.status?.name ?? 'no status'} → In review`, () => set(pr.url, { status: 'In review' }));
+        if (it.status?.name !== want) act(`${short(pr.url)}: PR ${it.status?.name ?? 'no status'} → ${want}`, () => set(pr.url, { status: want }));
         if (links && (it.fixesText?.text ?? '') !== fixes) act(`${short(pr.url)}: Fixes "${fixes}"`, () => set(pr.url, { fixesText: fixes }));
       }
       if (!pr.isDraft && !pr.reviewRequests.length && !pr.latestReviews.length)
@@ -241,9 +255,11 @@ export function sync(board, profile, { dry = false, closeMerged = false } = {}) 
       ...(mergedPR.get(c.url) ?? []).map((p) => `${shortIn(p.url, repo)} merged`)].join(' · ');
     if (links && (it.prText?.text ?? '') !== prs) act(`${ref}: Pull request "${prs}"`, () => set(c.url, { prText: prs }));
 
-    if (c.state === 'OPEN' && open && [null, 'Backlog', 'Ready', 'In progress'].includes(s)) {
-      act(`${ref}: ${s ?? 'no status'} → In review (${short(open.url)})`, () => set(c.url, { status: 'In review' }));
-      now = 'In review';
+    // An issue is ready to merge only when every open PR that names it is.
+    const want = open && openPR.get(c.url).every((p) => p.ready) ? 'Ready to merge' : 'In review';
+    if (c.state === 'OPEN' && open && [null, 'Backlog', 'Ready', 'In progress', 'In review', 'Ready to merge'].includes(s) && s !== want) {
+      act(`${ref}: ${s ?? 'no status'} → ${want} (${short(open.url)})`, () => set(c.url, { status: want }));
+      now = want;
     } else if (merged && !open && c.stateReason !== 'NOT_PLANNED' && !['On test', 'Done'].includes(s)) {
       act(`${ref}: ${s ?? 'no status'} → On test (${short(merged.url)} merged)`, () => set(c.url, { status: 'On test' }));
       now = 'On test';
@@ -260,7 +276,7 @@ export function sync(board, profile, { dry = false, closeMerged = false } = {}) 
     else if (c.stateReason === 'NOT_PLANNED' && s && s !== 'Done')
       checks.push(`${ref}: closed as not planned and still ${s}. Archive it on the board.`);
 
-    if (['In progress', 'In review'].includes(now) && !it.sprint && cur)
+    if (['In progress', 'In review', 'Ready to merge'].includes(now) && !it.sprint && cur)
       act(`${ref}: Sprint → ${cur.title}`, () => set(c.url, { sprint: 'current' }));
     if (now === 'In progress' && !c.assignees.totalCount) checks.push(`${ref}: In progress with nobody assigned.`);
     if (it.sprint && endOf(it.sprint) <= today() && c.state === 'OPEN')
