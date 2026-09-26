@@ -325,4 +325,4 @@ function main() {
   } else sync(board, profile, { dry: flags.dry, closeMerged: flags['close-merged'] });
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
