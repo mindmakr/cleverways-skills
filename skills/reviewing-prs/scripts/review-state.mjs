@@ -5,6 +5,7 @@
 //
 // Usage:
 //   node review-state.mjs get <pr> [--repo owner/repo]                 prints { commentId, state }
+//   node review-state.mjs issues <pr> [--repo owner/repo]              prints linked issue numbers
 //   node review-state.mjs put <pr> --file state.json [--repo owner/repo] [--dry]  creates or updates the comment (--dry prints it)
 //
 // State: { pr, round, reviewedSha, issues: [n], verdict, blockedOn,
@@ -20,7 +21,7 @@ import { join } from 'node:path';
 const MARK = '<!-- cleverways:pr-review -->';
 const [cmd, pr, ...rest] = process.argv.slice(2);
 const opt = (name) => { const i = rest.indexOf(`--${name}`); return i === -1 ? null : rest[i + 1]; };
-if (!['get', 'put'].includes(cmd) || !pr) {
+if (!['get', 'put', 'issues'].includes(cmd) || !pr) {
   console.error('Usage: review-state.mjs get|put <pr> [--file state.json] [--repo owner/repo]');
   process.exit(2);
 }
@@ -57,7 +58,17 @@ function render(s) {
   ].join('\n');
 }
 
-if (cmd === 'get') {
+if (cmd === 'issues') {
+  // Linked issues: GitHub's closing references (GraphQL; not every gh version exposes them
+  // in `gh pr view --json`) plus any #n written in the PR body.
+  const [owner, name] = repo.split('/');
+  const q = 'query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){body closingIssuesReferences(first:50){nodes{number}}}}}';
+  const data = JSON.parse(gh(['api', 'graphql', '-f', `query=${q}`, '-F', `o=${owner}`, '-F', `r=${name}`, '-F', `n=${pr}`]));
+  const p = data.data.repository.pullRequest;
+  const nums = new Set(p.closingIssuesReferences.nodes.map((x) => x.number));
+  for (const m of (p.body ?? '').matchAll(/(?:^|[\s(])#(\d+)\b/g)) if (Number(m[1]) !== Number(pr)) nums.add(Number(m[1]));
+  console.log(JSON.stringify([...nums].sort((a, b) => a - b)));
+} else if (cmd === 'get') {
   console.log(JSON.stringify(find(), null, 2));
 } else {
   const state = JSON.parse(readFileSync(opt('file') ?? '', 'utf8'));
