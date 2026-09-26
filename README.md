@@ -57,7 +57,7 @@ always          project-profile, writing-plainly, managing-translations
 
 ### The board follows the work
 
-With a board in the profile, each skill moves its card as it acts: filed → Backlog, planned → Ready, fix started → In progress (assigned, current sprint), PR opened → In review, merged → On test, verified → Done, or back to Ready on a failure. Issue cards show their PRs in a "Pull request" field, because GitHub leaves "Linked pull requests" empty for PRs into a branch other than the default. Work found out of scope becomes a follow-up issue with a priority, under the same parent. `board.mjs sync` catches what people changed by hand.
+With a board in the profile, each skill moves its card as it acts: filed → Backlog, planned → Ready, fix started → In progress (assigned, current sprint), PR opened → In review, review passed on the latest commit → Ready to merge (a new commit sends it back to In review), merged → On test (the issue is closed by the profile's rule), verified → Done, or back to Ready on a failure. Open PRs sit on the board too, in the same columns. Issue cards show their PRs in a "Pull request" field, because GitHub leaves "Linked pull requests" empty for PRs into a branch other than the default. Work found out of scope becomes a follow-up issue with a priority, under the same parent. `board.mjs sync` catches what people changed by hand.
 
 ## Install
 
