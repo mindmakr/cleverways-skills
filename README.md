@@ -20,6 +20,18 @@ Agent skills for everyday engineering work. They are generic: each project descr
 | `project-profile` | Create or read the project profile the other skills depend on |
 | `writing-plainly` | Keep every reply, issue and note short and specific |
 
+## How they fit
+
+```
+plan            planning-epics / -features / -replacements / -refactors   → milestone + task issues
+investigate     investigating-issues                                        → linked issues, one per repo
+build           resolving-issues                                            → test-first fix, one PR per repo
+review          reviewing-prs                                               → verdict + tracking comment, round per new commit
+test            testing-web-visually / testing-mobile-visually              → screenshots → reporting-visual-defects → visual-test issues
+ship            writing-release-notes                                       → GitHub releases (changes, testers, devops) + stakeholder page
+always          project-profile, writing-plainly, aligning-translations
+```
+
 ## Install
 
 ### Claude Code: for everyone in a project
