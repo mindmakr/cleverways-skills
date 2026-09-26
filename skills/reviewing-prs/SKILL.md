@@ -15,12 +15,14 @@ The goal is a merge verdict backed by evidence: the PR fully covers its linked i
    - **Merged:** set the verdict to `MERGED`, close the linked issues by the profile's rule (a comment naming the PR and merge commit), run `board.mjs set <issue refs> --status "On test"` and `board.mjs set <pr url> --status Done` (the setting-up-project-tracking skill's script), update the tracker, and stop.
    - **Closed without merging:** set the verdict to `CLOSED`, move the PR to Done and its issues back to Ready on the board, update the tracker, and stop.
    - **Replies:** read the replies to your inline comments (`gh api repos/<repo>/pulls/<pr>/comments`). "Fixed in <sha>" is checked in step 4. A disagreement becomes a question for the user in step 5.
+   - **Other reviewers:** read every review and inline comment by others (people, Copilot, security bots) and every failing check. Each claim is a candidate for step 4, verified like your own and credited to its author. Never repeat one as a finding without checking it.
    - If `headRefOid` equals the state's `reviewedSha`, nothing new has been pushed. Report the current state and stop. Re-reviewing the same commit is the loop to avoid.
 2. **Scope.** The linked issues are those `issues` printed; their acceptance checklists are the coverage goal. Take linked PRs in other repos from the issues.
    - When the PR links no issue, the PR description is the goal: turn its claims into checklist items. In the first round, ask once whether that is the full scope.
    - The range is `reviewedSha..head` when `reviewedSha` is an ancestor of head (`git merge-base --is-ancestor`), otherwise the whole PR.
 3. **Review, in parallel where the agent can:**
    - **Correctness.** In Claude Code, run the `code-review` skill on the PR at level `high`. Elsewhere, read the diff for defects.
+   - **Security.** In Claude Code, run the `security-review` skill on the range. Elsewhere, check the diff for injection, missing authorisation or tenant scoping, secrets, unsafe input handling, and new or upgraded dependencies with known advisories (`npm audit`, `osv-scanner`). A security finding is at least high.
    - **Project reviewer.** Give a subagent `reviewer-brief.md` from this skill's folder, plus the PR, the range, the issues and the open findings. It returns coverage, earlier-finding status, candidate findings and questions, as JSON.
 4. **Verify.** Keep a candidate only when you can open its file and see the quoted line at head, and the reason holds. A candidate that depends on intent becomes a question. Drop duplicates by fingerprint: `path:symbol:problem`.
 5. **Ask.** Ask the user the round's open questions together, at most four, each with options and your recommendation (AskUserQuestion in Claude Code). Record each answer in the state. A question once answered is never asked again. If the user is not available, mark the question open and set `blockedOn` to the user.

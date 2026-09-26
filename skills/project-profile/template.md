@@ -51,7 +51,7 @@ Shared: <path to another repo's profile, or delete this line>
 - PR base branch: <branch>
 - Branch from: <base, or the previous PR's branch when stacking>
 - Never: <push to deploy branches, merge without an ask>
-- Reviewers: <GitHub handles asked to review every PR>
+- Reviewers: <GitHub handles asked to review every PR; the PR's author is skipped>
 - Issues close when: <merged into which branch, by whom>
 
 ## Issues
