@@ -10,6 +10,7 @@
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { adbPath, maestroPath, toolEnv } from './tools.mjs';
 
 const argv = process.argv.slice(2);
 const arg = (name) => { const i = argv.indexOf(`--${name}`); return i === -1 ? null : argv[i + 1]; };
@@ -22,9 +23,9 @@ const api = new URL(arg('api-url') ?? die('Missing --api-url (the URL the app ca
 const localNet = /^(localhost|127\.0\.0\.1|10\.0\.2\.2|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)$/;
 if (!localNet.test(api.hostname)) die(`Refusing ${api.hostname}: visual tests run against a local backend only.`);
 
-const has = (cmd) => spawnSync(cmd, ['--version'], { shell: true, stdio: 'ignore' }).status === 0;
-if (!has('maestro')) die('Maestro not found. Install it: https://docs.maestro.dev/getting-started/installing-maestro');
-const adb = has('adb');
+const maestro = maestroPath() ?? die('Maestro not found. Run: node setup.mjs (in this folder)');
+const adb = adbPath();
+const env = toolEnv();
 
 const locales = (arg('locales') ?? 'en').split(',');
 const only = arg('only');
@@ -38,17 +39,18 @@ for (const locale of locales) {
   const dir = join(outDir, locale);
   mkdirSync(dir, { recursive: true });
   for (const flow of flows) {
-    if (adb) spawnSync('adb', ['logcat', '-c'], { shell: true });
+    if (adb) spawnSync(adb, ['logcat', '-c']);
     // Screenshots are written relative to the working directory, so run inside the output folder.
-    const res = spawnSync('maestro', ['test', join(flowsDir, flow), '-e', `APP_ID=${appId}`, '-e', `LOCALE=${locale}`, ...extraEnv],
-      { cwd: dir, shell: true, encoding: 'utf8' });
+    const res = spawnSync(maestro, ['test', join(flowsDir, flow), '-e', `APP_ID=${appId}`, '-e', `LOCALE=${locale}`, ...extraEnv],
+      { cwd: dir, env, shell: process.platform === 'win32', encoding: 'utf8' });
     const findings = [];
     if (res.status !== 0) findings.push({ check: 'flow-failed', detail: (res.stdout + res.stderr).split('\n').filter((l) => /fail|error|not found|assert/i.test(l)).slice(0, 5).join(' | ') });
     if (adb) {
-      const log = spawnSync('adb', ['logcat', '-d', '-s', 'ReactNativeJS:E', 'flutter:E', 'AndroidRuntime:E'], { shell: true, encoding: 'utf8' }).stdout ?? '';
+      const log = spawnSync(adb, ['logcat', '-d', '-s', 'ReactNativeJS:E', 'flutter:E', 'AndroidRuntime:E'], { encoding: 'utf8' }).stdout ?? '';
       for (const line of log.split('\n').filter((l) => /\sE\s/.test(l)).slice(0, 10)) findings.push({ check: 'app-error', detail: line.trim().slice(0, 300) });
     }
-    const shots = readdirSync(dir).filter((f) => f.endsWith('.png')).map((f) => join(dir, f));
+    const name = flow.replace(/\.ya?ml$/, '');
+    const shots = readdirSync(dir).filter((f) => f.endsWith('.png') && f.startsWith(name)).map((f) => join(dir, f));
     manifest.results.push({ flow, locale, status: res.status === 0 ? 'passed' : 'failed', screenshots: shots, findings });
     console.log(`${findings.length ? '✗' : '✓'} ${locale} ${flow}${findings.length ? ` (${findings.map((f) => f.check).join(', ')})` : ''}`);
   }

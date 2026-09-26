@@ -41,7 +41,14 @@ This copies the skills into `~/.agents/skills`. Use `--target <dir>` for an agen
 - `gh` CLI signed in with access to every repo the profile lists: `gh auth login`, then `gh auth setup-git`.
 - Related repos cloned side by side, at the local paths the profile gives, so skills can search them.
 - Node 18 or later, for the scripts.
-- Visual tests: `npm i --prefix ~/.cache/cleverways playwright && npx --prefix ~/.cache/cleverways playwright install chromium`. For mobile, install [Maestro](https://docs.maestro.dev) and put `adb` on PATH.
+- Web visual tests: `node skills/testing-web-visually/scripts/setup.mjs`. It installs Playwright and Chromium into `~/.cache/cleverways`.
+- Mobile visual tests: `node skills/testing-mobile-visually/scripts/setup.mjs --start-emulator <avd>`. It:
+  - checks Java 17+ (Android Studio's bundled JDK counts), `adb`, the emulator and your AVDs;
+  - installs Maestro into `~/.maestro`;
+  - cold-boots the emulator.
+
+  It never edits PATH, because the sweep finds every tool itself. Create AVDs in Android Studio > Device Manager.
+- In a Claude Code session, ask "set up visual testing" and the skill runs the setup script.
 - Visual tests run only against a local stack with seeded data. The scripts refuse any other host.
 
 ## Use

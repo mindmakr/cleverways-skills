@@ -11,8 +11,10 @@ The app runs on a local emulator or simulator, against the local backend with se
 
 ## Set up once
 
-- Maestro (https://docs.maestro.dev), which drives Expo, React Native, Flutter and native apps with the same flow files.
-- For Android, the emulator plus `adb` on PATH. For iOS, a Mac with Xcode simulators.
+- Run `node ${CLAUDE_SKILL_DIR}/scripts/setup.mjs --start-emulator <avd>`. It checks Java 17+, `adb`, the emulator and your AVDs, installs Maestro into `~/.maestro`, and cold-boots the emulator. It reports anything it cannot install, such as a JDK or an AVD. Ask the user before installing those.
+- Maestro drives Expo, React Native, Flutter and native apps with the same flow files. For iOS you need a Mac with Xcode simulators.
+- Expo dev-client builds: the flow taps the Metro server in the launcher, dismisses the developer menu, and steps through any first-run onboarding. `flow-template.yaml` shows the pattern.
+- Before sweeping, confirm the app really calls the local API (for example the app's own log line naming the API origin). A URL in an env file is not proof.
 - Two device profiles, one small (360dp wide) and one large, named in the profile.
 - Flows live in `.maestro/visual/`, one file per screen, created from `flow-template.yaml` in this skill's folder. Shared steps (language, login) go in `.maestro/visual/subflows/`.
 - Add `.visual-tests/` to the project's `.gitignore`.
