@@ -7,7 +7,7 @@ description: Use when asked to fix, resolve or implement a GitHub issue, especia
 
 Linked issues are one change. Fix all of them in the same session, in the order the issue states.
 
-**Required:** the project-profile skill (commands, git flow, locales) and the writing-plainly skill. If the issue has no investigation with `path:line` evidence, run the investigating-issues skill first.
+**Required:** the project-profile skill (commands, git flow, locales) and the writing-plainly skill. If the issue has no investigation with cited evidence (permalink, symbol, quoted code), run the investigating-issues skill first.
 
 ## Steps
 
