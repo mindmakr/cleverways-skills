@@ -64,7 +64,8 @@ if (cmd === 'resolve') {
   //  - resolves the inline thread of every finding that is `fixed` or `invalid`
   //    (a thread belongs to a finding when its first comment starts with "**R<n> ·");
   //  - hides review bodies from earlier rounds as OUTDATED ("<!-- cleverways:review-round:<n> -->");
-  //  - once no finding is open, hides every round review and every fix note
+  //  - keeps the latest round review visible (the verdict at the bottom of the PR);
+  //  - once no finding is open, hides earlier round reviews and every fix note
   //    ("<!-- cleverways:fix-note -->") as RESOLVED. The tracker comment is never hidden.
   const [owner, name] = repo.split('/');
   const q = 'query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){'
@@ -85,9 +86,10 @@ if (cmd === 'resolve') {
   }
   for (const r of p.reviews.nodes) {
     const round = Number(r.body?.match(/<!-- cleverways:review-round:(\d+) -->/)?.[1]);
-    if (!round || r.isMinimized) continue;
-    if (allDone) { hide(r.id, 'RESOLVED'); console.log(`hid round ${round} review (resolved)`); }
-    else if (round < state.round) { hide(r.id, 'OUTDATED'); console.log(`hid round ${round} review (outdated)`); }
+    // The latest round's review stays visible: it is the verdict at the bottom of the conversation.
+    if (!round || r.isMinimized || round >= state.round) continue;
+    hide(r.id, allDone ? 'RESOLVED' : 'OUTDATED');
+    console.log(`hid round ${round} review`);
   }
   if (allDone) {
     for (const c of p.comments.nodes) {
