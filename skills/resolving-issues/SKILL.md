@@ -18,6 +18,8 @@ Linked issues are one change. Fix all of them in the same session, in the order 
 
    For every input: list the repos and the order they are fixed in. The default order is the layer that owns the logic first, then its clients. Re-find each cited location by its symbol and quoted code, not by the line number, because the line may have moved. If the quoted code is gone, check `git log -S '<quoted code>'` to see whether someone already fixed it, and say so on the issue.
 2. **Branch.** In each repo, run `git branch --show-current` before the first write. Run it again in the same command as every commit and push. Create the branch the profile's git flow names.
+   - If the branch is checked out in another worktree (someone else's session), leave that worktree alone. Add your own with `git worktree add --detach <dir> origin/<branch>`, and push with `git push origin HEAD:<branch>` after checking that the remote head has not moved.
+   - Edit code with the file editor, not with shell one-liners: the shell expands backticks and `$` inside strings, and can run what it expands.
 3. **Red.** Write a test that reproduces the issue's figures. Run it and watch it fail.
 4. **Fix at the cause.** Reuse the shared helper, or create one. Add no fallback values, compatibility shims or second copies of a rule.
 5. **Verify.** Run the profile's commands for every area you touched (typecheck, lint, tests, guardrails, translation check). Paste the real output. A failing command means the work is not done.
