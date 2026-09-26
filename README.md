@@ -5,7 +5,7 @@ Agent skills for everyday engineering work. They are generic: each project descr
 | Skill | Use it to |
 |---|---|
 | `investigating-issues` | Find the root cause of a bug with code evidence, check every layer and repo for the same pattern, and open linked issues |
-| `resolving-issues` | Fix an issue and every issue linked to it, test-first, one PR per repo |
+| `fixing-issues` | Fix an issue and every issue linked to it, test-first, one PR per repo |
 | `planning-epics` | Plan an epic: a milestone, an epic issue, features as sub-issues, tasks under each |
 | `planning-features` | Plan a feature, on its own or inside an epic, with a task for every layer and repo it touches |
 | `planning-replacements` | Plan replacing one behaviour or implementation with another: inventory, cutover, and removal of the old way |
@@ -14,7 +14,7 @@ Agent skills for everyday engineering work. They are generic: each project descr
 | `verifying-fixes` | Check a fixed issue's acceptance items with evidence, then close or reopen it |
 | `reviewing-prs` | Review a PR against its linked issues and the project rules until it is ready to merge; findings and questions are tracked in one comment on the PR |
 | `writing-release-notes` | Draft a GitHub release per repo, plus a plain-language page for stakeholders |
-| `aligning-translations` | Check locale parity, fix missing or untranslated keys, add a language |
+| `managing-translations` | Check locale parity, fix missing or untranslated keys, add a language |
 | `testing-web-visually` | Sweep a locally running web app with Playwright across roles, locales and screen sizes; review the screenshots |
 | `testing-mobile-visually` | Sweep a mobile app (Expo, React Native, Flutter, native) on a local emulator with Maestro |
 | `reporting-visual-defects` | Turn visual findings into deduplicated GitHub issues, with pinned screenshots |
@@ -26,29 +26,29 @@ Agent skills for everyday engineering work. They are generic: each project descr
 ```
 plan            planning-epics / -features / -replacements / -refactors   → milestone + task issues
 investigate     investigating-issues                                        → linked issues, one per repo
-build           resolving-issues                                            → test-first fix, one PR per repo
+build           fixing-issues                                            → test-first fix, one PR per repo
 review          reviewing-prs                                               → verdict + tracking comment, round per new commit
-fix review      resolving-issues #<pr>                                      → open findings fixed on the same branch, replies, next round
+fix review      fixing-issues #<pr>                                      → open findings fixed on the same branch, replies, next round
 verify          verifying-fixes                                             → acceptance items checked with evidence → close or reopen
 test            testing-web-visually / testing-mobile-visually              → screenshots → reporting-visual-defects → visual-test issues
 ship            writing-release-notes                                       → GitHub releases (changes, testers, devops) + stakeholder page
-always          project-profile, writing-plainly, aligning-translations
+always          project-profile, writing-plainly, managing-translations
 ```
 
 ## Who uses what
 
 | Role | Starts with | Ends when |
 |---|---|---|
-| Developer | `planning-*` or `investigating-issues` creates the work, then `resolving-issues #<issue>` builds it | The PR is open and `reviewing-prs` has run its first round |
+| Developer | `planning-*` or `investigating-issues` creates the work, then `fixing-issues #<issue>` builds it | The PR is open and `reviewing-prs` has run its first round |
 | Reviewer | `reviewing-prs #<pr>` | The verdict is READY TO MERGE, or BLOCKED ON a named person |
-| Developer, after review | `resolving-issues #<pr>` fixes the open findings on the same branch and replies "Fixed in `<sha>`" | The next `reviewing-prs` round finds nothing open |
+| Developer, after review | `fixing-issues #<pr>` fixes the open findings on the same branch and replies "Fixed in `<sha>`" | The next `reviewing-prs` round finds nothing open |
 | Tester | `testing-web-visually` / `testing-mobile-visually`, then `verifying-fixes #<issue>` after merge | Every acceptance item passed (issue closed), or the failure is recorded (issue reopened) |
 | Release owner | `writing-release-notes` | Draft releases with sections for testers and devops, plus a stakeholder page |
 
 ### The review-fix loop
 
 1. `reviewing-prs #<pr>` posts the verdict, inline comments and one tracking comment.
-2. `resolving-issues #<pr>` takes the open findings as its work list, fixes them, replies to each, and starts the next review round.
+2. `fixing-issues #<pr>` takes the open findings as its work list, fixes them, replies to each, and starts the next review round.
 3. The reviewer verifies each fix, resolves that finding's thread, and hides superseded round reviews and fix notes, so the PR shows only what is still open. Repeat until READY TO MERGE. A round that changes nothing stops the loop as "stalled", naming the owner of each open item. At most three rounds run per session.
 4. A person merges. The next `reviewing-prs` run sees the merge, closes the linked issues and marks the tracker MERGED.
 5. `verifying-fixes #<issue>` confirms each acceptance item with evidence.
@@ -97,13 +97,13 @@ Type the slash command, or describe the task in words; the agent picks the skill
 | Skill | Say | You get |
 |---|---|---|
 | investigating-issues | `/cleverways:investigating-issues` then the report, screenshots, or `#123` | One issue per affected repo, cross-linked, with pinned code citations. No code changes. |
-| resolving-issues | `/cleverways:resolving-issues #123` | A failing test, then the fix, the checks run, and one PR per repo. Nothing is merged. |
+| fixing-issues | `/cleverways:fixing-issues #123` | A failing test, then the fix, the checks run, and one PR per repo. Nothing is merged. |
 | planning-epics / -features / -replacements / -refactors | `/cleverways:planning-epics early settlement for employers` | A draft plan to confirm once, then a milestone, a parent issue and `task` sub-issues on GitHub. No code changes. |
 | reviewing-prs | `/cleverways:reviewing-prs #565` | A verdict (READY TO MERGE / NEEDS FIXES / BLOCKED ON), inline comments for new findings, and a tracking comment updated each round. Re-running after new commits reviews only the new commits; it never merges. |
-| resolving-issues (review fixes) | `/cleverways:resolving-issues #565` | The PR's open review findings fixed on its branch, a `Fixed in <sha>` reply on each, then a new review round. |
+| fixing-issues (review fixes) | `/cleverways:fixing-issues #565` | The PR's open review findings fixed on its branch, a `Fixed in <sha>` reply on each, then a new review round. |
 | verifying-fixes | `/cleverways:verifying-fixes #567` | A pass/fail table per acceptance item with evidence, then the issue closed or reopened. |
 | writing-release-notes | `/cleverways:writing-release-notes since the last promotion` | Draft GitHub releases (changes, for testers, for devops) and a stakeholder page. |
-| aligning-translations | `/cleverways:aligning-translations` or "add French" | A parity table per repo and locale, then the fixes. |
+| managing-translations | `/cleverways:managing-translations` or "add French" | A parity table per repo and locale, then the fixes. |
 | testing-web-visually | `/cleverways:testing-web-visually the declined screens` | Screenshots per role, locale and size, automatic checks, a visual review, and `visual-test` issues. Local stack only. |
 | testing-mobile-visually | `/cleverways:testing-mobile-visually` | The same for the app, on a local emulator. |
 | project-profile | "set up the project profile" | `.agents/project-profile.md`, filled from the repo plus your answers. |

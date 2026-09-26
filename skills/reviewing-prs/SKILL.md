@@ -44,7 +44,7 @@ The goal is a merge verdict backed by evidence: the PR fully covers its linked i
 ## Loop control
 
 - A round runs only on a new head commit (step 1), so waiting for the author is a stop, not a loop.
-- Within a session, a new round starts only when this session pushed fixes (the resolving-issues skill) or the user asks again. Run at most three rounds per session.
+- Within a session, a new round starts only when this session pushed fixes (the fixing-issues skill) or the user asks again. Run at most three rounds per session.
 - Stop when a round changes nothing: no new findings and no status changes. Report "stalled" with each open item and its owner.
 - Every open item has one owner: author, user or reviewer. Act on reviewer items. Hand the others over and stop. Never poll, sleep or wait for a reply.
 

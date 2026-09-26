@@ -1,9 +1,9 @@
 ---
-name: resolving-issues
+name: fixing-issues
 description: Use when asked to fix, resolve or implement a GitHub issue or planned task, especially one linked to issues in other repositories, or to address review findings left on a pull request.
 ---
 
-# Resolving issues
+# Fixing issues
 
 Linked issues are one change. Fix all of them in the same session, in the order the issue states.
 

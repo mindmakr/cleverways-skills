@@ -1,6 +1,7 @@
 ---
 name: planning-work
 description: Use when turning a request into GitHub milestones and issues, and when another planning skill (epics, features, replacements, refactors) reaches its draft, approve and create steps.
+user-invocable: false
 ---
 
 # Planning work
@@ -27,7 +28,7 @@ A plan is only as good as the investigation behind it. Every task names the code
    - Run `node ${CLAUDE_SKILL_DIR}/scripts/plan-to-github.mjs --plan plan.json --dry`, check the output, then run it without `--dry`. Outside Claude Code, `${CLAUDE_SKILL_DIR}` is this skill's folder.
    - Every child issue carries the `task` label. The parent carries its type: `epic`, `feature`, `replace` or `refactor`.
    - Re-running is safe: existing titles are reused.
-6. **Reply** in six lines or fewer: the milestone link, the parent link, the task count per repo, and the first task to start. Implementation then runs one task at a time with the resolving-issues skill, and each PR goes through the reviewing-prs skill.
+6. **Reply** in six lines or fewer: the milestone link, the parent link, the task count per repo, and the first task to start. Implementation then runs one task at a time with the fixing-issues skill, and each PR goes through the reviewing-prs skill.
 
 ## Stop
 

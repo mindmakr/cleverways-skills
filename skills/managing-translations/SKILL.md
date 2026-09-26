@@ -1,9 +1,9 @@
 ---
-name: aligning-translations
+name: managing-translations
 description: Use when adding or editing user-facing strings, when a screen shows a missing key or untranslated text, when checking locale parity across repos, or when adding a language.
 ---
 
-# Aligning translations
+# Managing translations
 
 Every locale has every key, the same placeholders, and a real translation.
 
@@ -17,7 +17,7 @@ Run this for every locale folder in every repo the profile lists:
 node ${CLAUDE_SKILL_DIR}/scripts/i18n-parity.mjs <dir> [<dir> ...] --base <base>
 ```
 
-Outside Claude Code, `${CLAUDE_SKILL_DIR}` is this skill's folder (for example `~/.agents/skills/aligning-translations`).
+Outside Claude Code, `${CLAUDE_SKILL_DIR}` is this skill's folder (for example `~/.agents/skills/managing-translations`).
 
 - The script exits 1 on `missing`, `extra` or `empty` keys.
 - It warns on `placeholder`, which means the variable names differ from the base, and on `sameAsBase`, which is probably untranslated.
