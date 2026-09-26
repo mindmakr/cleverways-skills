@@ -21,7 +21,8 @@ Every line traces back to a PR or a commit.
 ## Steps
 
 1. **Range.** If the user did not give one, ask: since the last tag, since the last promotion, or a custom range. Resolve it to a from-ref and a to-ref in each repo.
-2. **Collect.** For each repo, run `git log --first-parent --merges <from>..<to>` and `gh pr list --state merged --base <branch> --search "merged:<from-date>..<to-date>" --json number,title,labels,body,url,files`. When a title does not say what changed, read the body and the diff.
+2. **Collect.** Run `board.mjs sync --dry` and `board.mjs list --release <tag>` (the setting-up-project-tracking skill's script) to see what the board expects in this release. For each repo, run `git log --first-parent --merges <from>..<to>` and `gh pr list --state merged --base <branch> --search "merged:<from-date>..<to-date>" --json number,title,labels,body,url,files`. When a title does not say what changed, read the body and the diff.
+   Then run `board.mjs set <issue refs> --release <tag>` for each shipped issue whose Release is empty or different. A missing Release option is added in the board UI, never by API. Anything the board has under this release that did not ship goes in the reply.
 3. **Group the changes.** Use Added, Fixed, Changed, Security, Breaking. A web PR and a mobile PR for the same change become one entry that links both.
 4. **For testers.** For each user-visible change, give:
    - the screen and role;
@@ -41,7 +42,7 @@ Every line traces back to a PR or a commit.
    For each, say what to do and on which environments, and give the rollback. Write "None" when a section has nothing; never leave it out.
 6. **Draft the GitHub release.** In each repo, run `gh release create <tag> --draft --title "<tag>" --notes-file <file>`, linking the other repo's release. Leave it as a draft until the user says publish.
 7. **Stakeholder page.** Include user-visible changes only, in the profile's terms. Leave out PR numbers, file names and implementation status. Say plainly when something is not live yet. Publish it as a shareable page where the agent can (a Claude artifact); otherwise write `release-notes-<tag>.md`.
-8. **Reply.** In four lines or fewer: the draft links, the page link, and any PR you could not classify.
+8. **Reply.** In four lines or fewer: the draft links, the page link, any PR you could not classify, and the board items planned for this release that did not ship.
 
 ## GitHub release format
 

@@ -21,14 +21,7 @@ One root cause is one issue, carrying pinned screenshots from the local run. Scr
    node ${CLAUDE_SKILL_DIR}/scripts/publish-screenshots.mjs --repo <repo dir> --run <run id> <png> [...]
    ```
    The script prints one URL per file, pinned to the commit. Publish only the screenshots the issues use.
-4. **File.** Use `issue-template.md` from this skill's folder, and keep the `<!-- vt:… -->` line. Labels are `visual-test`, `bug` and a priority: take the priority from the user, otherwise from the severity table below. Create a missing label with `gh label create visual-test --color 5319E7`. The title prefix comes from the profile.
-5. **Cross-repo.** When the cause lives in another repo (for example a server-side string), file the issue there as well, and open both with the linked-issues note from the investigating-issues skill.
-6. **Reply** in six lines or fewer: the new issue links, the updated ones, and any finding you did not file, with the reason.
-
-## Severity
-
-| Priority | When |
-|---|---|
-| high | Blocks a task, shows wrong money, or shows another user's data |
-| medium | Wrong or untranslated text, a broken layout on phones or in right-to-left locales, errors in the console or API |
-| low | Cosmetic: spacing, alignment, colour |
+4. **File.** Use `issue-template.md` from this skill's folder, and keep the `<!-- vt:… -->` line. Labels are `visual-test`, `bug` and a priority from the investigating-issues skill's priority table. Create a missing label with `gh label create visual-test --color 5319E7`. The title prefix comes from the profile.
+5. **Board.** Run `board.mjs set <ref> --platform <platform>` (the setting-up-project-tracking skill's script) for each new issue. A reopened issue goes back to Ready: `--status Ready`.
+6. **Cross-repo.** When the cause lives in another repo (for example a server-side string), file the issue there as well, and open both with the linked-issues note from the investigating-issues skill.
+7. **Reply** in six lines or fewer: the new issue links, the updated ones, and any finding you did not file, with the reason.

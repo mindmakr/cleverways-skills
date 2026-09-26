@@ -28,8 +28,22 @@ This skill changes no code.
 3. **Trace.** Follow the value from the screen through the API, the service and the query to the line that produces it. Show the arithmetic that reproduces the reported number from the stored data.
 4. **Sweep.** Search for the same pattern (the same field, query shape or helper) in every layer and every repo the profile lists. Record each hit as ✅ correct, ❌ affected or n/a, with `path:line`. Cover labels, layout and display, and any client that computes what the profile says the server owns.
 5. **Plan the fix.** Fix it in the layer that owns the logic, with one shared helper when several sites need the same rule. For each file, say what changes. A contract change that a separately released client reads must be additive. Add translations for every locale in the profile, tests that use the figures from step 2, and an acceptance checklist.
-6. **Log it.** Open one issue per affected repo using `issue-template.md` from this skill's folder, with the title prefix and labels from the profile. When more than one repo is affected, each issue opens with the template's linked-issues note and links the others.
+6. **Log it.** Open one issue per affected repo using `issue-template.md` from this skill's folder, with the title prefix and labels from the profile, including a priority label from the table below. When more than one repo is affected, each issue opens with the template's linked-issues note and links the others. Put each on the board with `board.mjs set <ref> --platform <layer>` (the setting-up-project-tracking skill's script); it lands in Backlog with the label's priority.
 7. **Reply.** Use the reply shape below.
+
+## Priority
+
+| Priority | When |
+|---|---|
+| high | Blocks a task, shows wrong money, shows another user's data, or opens a security gap |
+| medium | Wrong behaviour or text with a workaround, a broken layout on phones or in right-to-left locales, errors in the console or API |
+| low | Cosmetic (spacing, alignment, colour), or a tidy-up users never see |
+
+The user's priority wins over the table.
+
+## Follow-ups
+
+Work found outside the current scope becomes an issue, never a note in a reply: a review finding the user deferred, a verification failure the fix did not cause, a client left to update, a TODO a fix leaves. Dedupe it (step 1), then file it as in step 6, in the current work's milestone. When the current work is a task under a parent, make it a sub-issue of that parent: `gh api -X POST repos/<repo>/issues/<parent>/sub_issues -F sub_issue_id=<issue id>`. Link it from where it was found: the PR, the review tracker or the issue.
 
 ## Output
 

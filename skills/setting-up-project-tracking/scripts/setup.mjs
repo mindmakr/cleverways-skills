@@ -67,9 +67,9 @@ if (!isNew) {
 }
 const field = (name) => fields.find((f) => f.name === name);
 
-const wantFields = ['Platform', 'Priority', 'Size', 'Start', 'Target', ...(opt.release.length ? ['Release'] : []), ...(opt['sprint-start'] ? ['Sprint'] : [])];
+const wantFields = ['Platform', 'Priority', 'Size', 'Start', 'Target', 'Pull request', 'Fixes', ...(opt.release.length ? ['Release'] : []), ...(opt['sprint-start'] ? ['Sprint'] : [])];
 const boardView = opt['sprint-start'] ? 'Scrum board · current sprint' : 'Kanban board';
-const wantViews = [boardView, 'Backlog', 'Roadmap', 'Release notes', 'Bug triage'];
+const wantViews = [boardView, 'Backlog', 'Roadmap', 'Release notes', 'Bug triage', 'Pull requests'];
 const missingReleases = opt.release.filter((r) => field('Release') && !field('Release').options.some((o) => o.name === r));
 
 const newIssues = [];
@@ -120,6 +120,9 @@ if (!field('Size')) select('Size', ['XS', 'S', 'M', 'L', 'XL']);
 if (opt.release.length && !field('Release')) select('Release', opt.release);
 for (const d of ['Start', 'Target'])
   if (!field(d)) { gh(['project', 'field-create', num, '--owner', owner, '--name', d, '--data-type', 'DATE']); console.log(`Field ${d}`); }
+// Written by board.mjs sync: the PRs that name an issue, and the issues a PR names.
+for (const t of ['Pull request', 'Fixes'])
+  if (!field(t)) { gh(['project', 'field-create', num, '--owner', owner, '--name', t, '--data-type', 'TEXT']); console.log(`Field ${t}`); }
 if (opt['sprint-start'] && !field('Sprint')) {
   const start = opt['sprint-start'];
   const its = Array.from({ length: Number(opt.sprints) }, (_, i) => `{title:"Sprint ${i + 1}",startDate:"${addDays(start, i * sprintDays)}",duration:${sprintDays}}`).join(',');
@@ -176,14 +179,16 @@ const nid = Object.fromEntries(json(['api', '--paginate', '--slurp', `${REST}/pr
 const ids = (...names) => names.filter((n) => nid[n]).map((n) => nid[n]);
 const specs = [
   { name: boardView, layout: 'board', filter: opt['sprint-start'] ? 'sprint:@current' : '-status:Done',
-    visible_fields: ids('Title', 'Priority', 'Platform', 'Size', 'Assignees', 'Linked pull requests'), vertical_group_by: ids('Status'), group_by: ids('Platform') },
-  { name: 'Backlog', layout: 'table', filter: '-status:Done',
-    visible_fields: ids('Title', 'Status', 'Priority', 'Platform', 'Size', 'Sprint', 'Release', 'Milestone', 'Assignees', 'Linked pull requests'),
+    visible_fields: ids('Title', 'Priority', 'Platform', 'Size', 'Assignees', 'Pull request'), vertical_group_by: ids('Status'), group_by: ids('Platform') },
+  { name: 'Backlog', layout: 'table', filter: 'is:issue -status:Done',
+    visible_fields: ids('Title', 'Status', 'Priority', 'Platform', 'Size', 'Sprint', 'Release', 'Milestone', 'Assignees', 'Pull request'),
     group_by: ids(nid.Release ? 'Release' : 'Milestone'), sort_by: [[nid.Priority, 'asc']] },
-  { name: 'Roadmap', layout: 'roadmap', filter: '-status:Done', visible_fields: ids('Title', 'Status', 'Release'), group_by: ids('Milestone') },
-  { name: 'Release notes', layout: 'table', filter: 'status:"On test",Done',
-    visible_fields: ids('Title', 'Repository', 'Platform', 'Labels', 'Linked pull requests', 'Status'), group_by: ids(nid.Release ? 'Release' : 'Milestone') },
-  { name: 'Bug triage', layout: 'table', filter: 'label:bug is:open',
+  { name: 'Roadmap', layout: 'roadmap', filter: 'is:issue -status:Done', visible_fields: ids('Title', 'Status', 'Release'), group_by: ids('Milestone') },
+  { name: 'Release notes', layout: 'table', filter: 'is:issue status:"On test",Done',
+    visible_fields: ids('Title', 'Repository', 'Platform', 'Labels', 'Pull request', 'Status'), group_by: ids(nid.Release ? 'Release' : 'Milestone') },
+  { name: 'Pull requests', layout: 'table', filter: 'is:pr -status:Done',
+    visible_fields: ids('Title', 'Repository', 'Fixes', 'Reviewers', 'Assignees', 'Status', 'Labels'), group_by: ids('Repository') },
+  { name: 'Bug triage', layout: 'table', filter: 'is:issue label:bug is:open',
     visible_fields: ids('Title', 'Priority', 'Platform', 'Status', 'Sprint', 'Release', 'Assignees', 'Labels'), group_by: ids('Priority'), sort_by: [[nid.Platform, 'asc']] },
 ];
 for (const s of specs)
