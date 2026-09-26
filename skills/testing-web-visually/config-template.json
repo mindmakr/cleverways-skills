@@ -1,0 +1,29 @@
+{
+  "baseUrl": "http://localhost:3000",
+  "allowedHosts": [],
+  "locales": [
+    { "code": "en", "dir": "ltr" },
+    { "code": "ar", "dir": "rtl" }
+  ],
+  "setLocale": { "cookie": "NEXT_LOCALE" },
+  "viewports": [
+    { "name": "phone", "width": 360, "height": 780 },
+    { "name": "tablet", "width": 768, "height": 1024 },
+    { "name": "desktop", "width": 1366, "height": 900 }
+  ],
+  "roles": {
+    "admin": {
+      "login": [
+        { "goto": "/login" },
+        { "fill": "label:Email", "value": "admin@example.test" },
+        { "click": "role:button:Continue", "captureResponse": { "url": "/request-otp", "path": "data.devCode", "as": "otp" } },
+        { "fill": "label:Code", "value": "{{otp}}" },
+        { "click": "role:button:Verify" },
+        { "waitForURL": "**/admin**" }
+      ]
+    }
+  },
+  "routes": [
+    { "role": "admin", "path": "/admin", "name": "Dashboard" }
+  ]
+}

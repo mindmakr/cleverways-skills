@@ -1,0 +1,21 @@
+# Visual check for one screen. mobile-sweep.mjs runs it once per locale with
+# APP_ID and LOCALE set, inside the output folder, so screenshots land there.
+# Shared steps (language, login) live in subflows/, which the sweep does not run directly.
+appId: ${APP_ID}
+---
+- launchApp:
+    clearState: true
+- runFlow:
+    file: subflows/set-language.yaml
+    env:
+      LOCALE: ${LOCALE}
+- runFlow: subflows/login.yaml
+# Prefer testID / accessibility id selectors; use visible text only when a screen has none.
+- tapOn:
+    id: "tab-insights"
+- assertVisible:
+    id: "insights-screen"
+- takeScreenshot: insights-${LOCALE}
+# For long screens, scroll and capture again.
+- scroll
+- takeScreenshot: insights-${LOCALE}-2

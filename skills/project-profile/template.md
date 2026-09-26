@@ -29,6 +29,14 @@ Shared: <path to another repo's profile, or delete this line>
 | Guardrails / invariants | | |
 | Translation check | | |
 
+## Local run
+
+- Start, in order: <database, migrate, seed, backend, web>
+- URLs: web <http://localhost:3000>, API <http://localhost:4000>
+- Seeded logins: <file:line of the seed>, role → identifier, shared password or how the local OTP is shown
+- Web visual config: `.agents/visual-test.json` (locale set by <cookie / query / storage>)
+- Mobile: app id <id>, run with <command>, API URL variable <NAME> = <http://10.0.2.2:port on Android>, language switched on <screen>, devices <small, large>, flows in `.maestro/visual/`
+
 ## Locales
 
 - Base locale: <en>

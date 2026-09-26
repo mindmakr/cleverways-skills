@@ -8,6 +8,9 @@ Agent skills for everyday engineering work. They are generic: each project descr
 | `resolving-issues` | Fix an issue and every issue linked to it, test-first, one PR per repo |
 | `writing-release-notes` | Draft a GitHub release per repo, plus a plain-language page for stakeholders |
 | `aligning-translations` | Check locale parity, fix missing or untranslated keys, add a language |
+| `testing-web-visually` | Sweep a locally running web app with Playwright across roles, locales and screen sizes; review the screenshots |
+| `testing-mobile-visually` | Sweep a mobile app (Expo, React Native, Flutter, native) on a local emulator with Maestro |
+| `reporting-visual-defects` | Turn visual findings into deduplicated GitHub issues, with pinned screenshots |
 | `project-profile` | Create or read the project profile the other skills depend on |
 | `writing-plainly` | Keep every reply, issue and note short and specific |
 
@@ -37,7 +40,9 @@ This copies the skills into `~/.agents/skills`. Use `--target <dir>` for an agen
 
 - `gh` CLI signed in with access to every repo the profile lists: `gh auth login`, then `gh auth setup-git`.
 - Related repos cloned side by side, at the local paths the profile gives, so skills can search them.
-- Node 18 or later, for the translation script.
+- Node 18 or later, for the scripts.
+- Visual tests: `npm i --prefix ~/.cache/cleverways playwright && npx --prefix ~/.cache/cleverways playwright install chromium`. For mobile, install [Maestro](https://docs.maestro.dev) and put `adb` on PATH.
+- Visual tests run only against a local stack with seeded data. The scripts refuse any other host.
 
 ## Use
 
@@ -49,6 +54,8 @@ Type the slash command, or describe the task in words; the agent picks the skill
 | resolving-issues | `/cleverways:resolving-issues #123` | A failing test, then the fix, the checks run, and one PR per repo. Nothing is merged. |
 | writing-release-notes | `/cleverways:writing-release-notes since the last promotion` | Draft GitHub releases (changes, for testers, for devops) and a stakeholder page. |
 | aligning-translations | `/cleverways:aligning-translations` or "add French" | A parity table per repo and locale, then the fixes. |
+| testing-web-visually | `/cleverways:testing-web-visually the declined screens` | Screenshots per role, locale and size, automatic checks, a visual review, and `visual-test` issues. Local stack only. |
+| testing-mobile-visually | `/cleverways:testing-mobile-visually` | The same for the app, on a local emulator. |
 | project-profile | "set up the project profile" | `.agents/project-profile.md`, filled from the repo plus your answers. |
 
 Other agents: name the skill in plain words, for example "use the investigating-issues skill on this report".
