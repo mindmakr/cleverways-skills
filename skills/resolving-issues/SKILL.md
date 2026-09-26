@@ -11,7 +11,7 @@ Linked issues are one change. Fix all of them in the same session, in the order 
 
 ## Steps
 
-1. **Read.** Read the issue, its comments and every linked issue. List the repos and the order they are fixed in. The default order is the layer that owns the logic first, then its clients.
+1. **Read.** Read the issue, its comments and every linked issue. List the repos and the order they are fixed in. The default order is the layer that owns the logic first, then its clients. Re-find each cited location by its symbol and quoted code, not by the line number, because the line may have moved. If the quoted code is gone, check `git log -S '<quoted code>'` to see whether someone already fixed it, and say so on the issue.
 2. **Branch.** In each repo, run `git branch --show-current` before the first write. Run it again in the same command as every commit and push. Create the branch the profile's git flow names.
 3. **Red.** Write a test that reproduces the issue's figures. Run it and watch it fail.
 4. **Fix at the cause.** Reuse the shared helper, or create one. Add no fallback values, compatibility shims or second copies of a rule.

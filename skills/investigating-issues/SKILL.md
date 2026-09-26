@@ -5,7 +5,17 @@ description: Use when asked to investigate a bug, a screenshot, a tester report 
 
 # Investigating issues
 
-Every finding comes from code, data or a command you ran, cited as `path:line` or as the output. What you did not verify goes under "Not checked". It never appears as a finding.
+Every finding comes from code, data or a command you ran, or the output of one. What you did not verify goes under "Not checked". It never appears as a finding.
+
+## Citing code
+
+Line numbers drift when others edit the file, so a bare `path:line` goes stale. Cite every location with all three:
+
+1. **Permalink pinned to a commit:** `https://github.com/<owner>/<repo>/blob/<sha>/<path>#L<a>-L<b>`, using `git rev-parse origin/<base>` for the sha, from the base branch the profile names.
+2. **Symbol:** the function, class or key that holds it, e.g. `AdminEmployeeService.findAll`.
+3. **Quoted code:** the exact line, e.g. `` `SUM(${ewaRequests.amount})` ``, so whoever fixes it can search for the text.
+
+In chat replies, `path:line` is fine; the issue body gets the full citation.
 
 **Required:** the project-profile skill (repos, layers, labels, linked-issue order) and the writing-plainly skill for everything you write.
 

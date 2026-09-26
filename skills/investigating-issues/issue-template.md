@@ -10,7 +10,7 @@
 
 ## Root cause
 
-`<path:line>`: <the code, and why it produces the observed value>
+[`<path>#L<a>`](<permalink pinned to sha>) in `<symbol>`: `<quoted code>`, and why it produces the observed value.
 
 ## Same pattern elsewhere
 
