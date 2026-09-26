@@ -6,6 +6,11 @@ Agent skills for everyday engineering work. They are generic: each project descr
 |---|---|
 | `investigating-issues` | Find the root cause of a bug with code evidence, check every layer and repo for the same pattern, and open linked issues |
 | `resolving-issues` | Fix an issue and every issue linked to it, test-first, one PR per repo |
+| `planning-epics` | Plan an epic: a milestone, an epic issue, features as sub-issues, tasks under each |
+| `planning-features` | Plan a feature, on its own or inside an epic, with a task for every layer and repo it touches |
+| `planning-replacements` | Plan replacing one behaviour or implementation with another: inventory, cutover, and removal of the old way |
+| `planning-refactors` | Plan an improvement that leaves behaviour unchanged: behaviour lock first, measured before and after |
+| `planning-work` | The shared steps the planning skills use: investigate, draft, confirm once, create on GitHub |
 | `reviewing-prs` | Review a PR against its linked issues and the project rules until it is ready to merge; findings and questions are tracked in one comment on the PR |
 | `writing-release-notes` | Draft a GitHub release per repo, plus a plain-language page for stakeholders |
 | `aligning-translations` | Check locale parity, fix missing or untranslated keys, add a language |
@@ -60,7 +65,8 @@ Type the slash command, or describe the task in words; the agent picks the skill
 |---|---|---|
 | investigating-issues | `/cleverways:investigating-issues` then the report, screenshots, or `#123` | One issue per affected repo, cross-linked, with pinned code citations. No code changes. |
 | resolving-issues | `/cleverways:resolving-issues #123` | A failing test, then the fix, the checks run, and one PR per repo. Nothing is merged. |
-| reviewing-prs | `/cleverways:reviewing-prs #568` | A verdict (READY TO MERGE / NEEDS FIXES / BLOCKED ON), inline comments for new findings, and a tracking comment updated each round. Re-running after new commits reviews only the new commits; it never merges. |
+| planning-epics / -features / -replacements / -refactors | `/cleverways:planning-epics early settlement for employers` | A draft plan to confirm once, then a milestone, a parent issue and `task` sub-issues on GitHub. No code changes. |
+| reviewing-prs | `/cleverways:reviewing-prs #565` | A verdict (READY TO MERGE / NEEDS FIXES / BLOCKED ON), inline comments for new findings, and a tracking comment updated each round. Re-running after new commits reviews only the new commits; it never merges. |
 | writing-release-notes | `/cleverways:writing-release-notes since the last promotion` | Draft GitHub releases (changes, for testers, for devops) and a stakeholder page. |
 | aligning-translations | `/cleverways:aligning-translations` or "add French" | A parity table per repo and locale, then the fixes. |
 | testing-web-visually | `/cleverways:testing-web-visually the declined screens` | Screenshots per role, locale and size, automatic checks, a visual review, and `visual-test` issues. Local stack only. |
