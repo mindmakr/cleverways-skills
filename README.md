@@ -35,6 +35,24 @@ ship            writing-release-notes                                       → 
 always          project-profile, writing-plainly, aligning-translations
 ```
 
+## Who uses what
+
+| Role | Starts with | Ends when |
+|---|---|---|
+| Developer | `planning-*` or `investigating-issues` creates the work, then `resolving-issues #<issue>` builds it | The PR is open and `reviewing-prs` has run its first round |
+| Reviewer | `reviewing-prs #<pr>` | The verdict is READY TO MERGE, or BLOCKED ON a named person |
+| Developer, after review | `resolving-issues #<pr>` fixes the open findings on the same branch and replies "Fixed in `<sha>`" | The next `reviewing-prs` round finds nothing open |
+| Tester | `testing-web-visually` / `testing-mobile-visually`, then `verifying-fixes #<issue>` after merge | Every acceptance item passed (issue closed), or the failure is recorded (issue reopened) |
+| Release owner | `writing-release-notes` | Draft releases with sections for testers and devops, plus a stakeholder page |
+
+### The review-fix loop
+
+1. `reviewing-prs #<pr>` posts the verdict, inline comments and one tracking comment.
+2. `resolving-issues #<pr>` takes the open findings as its work list, fixes them, replies to each, and starts the next review round.
+3. Repeat until READY TO MERGE. A round that changes nothing stops the loop as "stalled", naming the owner of each open item. At most three rounds run per session.
+4. A person merges. The next `reviewing-prs` run sees the merge, closes the linked issues and marks the tracker MERGED.
+5. `verifying-fixes #<issue>` confirms each acceptance item with evidence.
+
 ## Install
 
 ### Claude Code: for everyone in a project
