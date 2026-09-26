@@ -49,7 +49,7 @@ always          project-profile, writing-plainly, aligning-translations
 
 1. `reviewing-prs #<pr>` posts the verdict, inline comments and one tracking comment.
 2. `resolving-issues #<pr>` takes the open findings as its work list, fixes them, replies to each, and starts the next review round.
-3. Repeat until READY TO MERGE. A round that changes nothing stops the loop as "stalled", naming the owner of each open item. At most three rounds run per session.
+3. The reviewer verifies each fix, resolves that finding's thread, and hides superseded round reviews and fix notes, so the PR shows only what is still open. Repeat until READY TO MERGE. A round that changes nothing stops the loop as "stalled", naming the owner of each open item. At most three rounds run per session.
 4. A person merges. The next `reviewing-prs` run sees the merge, closes the linked issues and marks the tracker MERGED.
 5. `verifying-fixes #<issue>` confirms each acceptance item with evidence.
 
