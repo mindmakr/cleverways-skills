@@ -14,6 +14,7 @@ Agent skills for everyday engineering work. They are generic: each project descr
 | `verifying-fixes` | Check a fixed issue's acceptance items with evidence, then close or reopen it |
 | `reviewing-prs` | Review a PR against its linked issues and the project rules until it is ready to merge; findings and questions are tracked in one comment on the PR |
 | `writing-release-notes` | Draft a GitHub release per repo, plus a plain-language page for stakeholders |
+| `setting-up-project-tracking` | One GitHub Project across the repos: sprints, a Release field, and scrum, backlog, roadmap, release-notes and bug-triage views |
 | `managing-translations` | Check locale parity, fix missing or untranslated keys, add a language |
 | `testing-web-visually` | Sweep a locally running web app with Playwright across roles, locales and screen sizes; review the screenshots |
 | `testing-mobile-visually` | Sweep a mobile app (Expo, React Native, Flutter, native) on a local emulator with Maestro |
@@ -31,6 +32,7 @@ review          reviewing-prs                                               → 
 fix review      fixing-issues #<pr>                                      → open findings fixed on the same branch, replies, next round
 verify          verifying-fixes                                             → acceptance items checked with evidence → close or reopen
 test            testing-web-visually / testing-mobile-visually              → screenshots → reporting-visual-defects → visual-test issues
+track           setting-up-project-tracking                                 → one board: sprints, Release field, five views
 ship            writing-release-notes                                       → GitHub releases (changes, testers, devops) + stakeholder page
 always          project-profile, writing-plainly, managing-translations
 ```
@@ -106,6 +108,7 @@ Type the slash command, or describe the task in words; the agent picks the skill
 | managing-translations | `/cleverways:managing-translations` or "add French" | A parity table per repo and locale, then the fixes. |
 | testing-web-visually | `/cleverways:testing-web-visually the declined screens` | Screenshots per role, locale and size, automatic checks, a visual review, and `visual-test` issues. Local stack only. |
 | testing-mobile-visually | `/cleverways:testing-mobile-visually` | The same for the app, on a local emulator. |
+| setting-up-project-tracking | `/cleverways:setting-up-project-tracking` | A GitHub Project across the profile's repos with sprints, a Release field and five views, the open issues on it, and a release-notes config PR per repo. |
 | project-profile | "set up the project profile" | `.agents/project-profile.md`, filled from the repo plus your answers. |
 
 Other agents: name the skill in plain words, for example "use the investigating-issues skill on this report".
