@@ -14,6 +14,8 @@ The app runs on a local emulator or simulator, against the local backend with se
 - Run `node ${CLAUDE_SKILL_DIR}/scripts/setup.mjs --start-emulator <avd>`. It checks Java 17+, `adb`, the emulator and your AVDs, installs Maestro into `~/.maestro`, and cold-boots the emulator. It reports anything it cannot install, such as a JDK or an AVD. Ask the user before installing those.
 - Maestro drives Expo, React Native, Flutter and native apps with the same flow files. For iOS you need a Mac with Xcode simulators.
 - Expo dev-client builds: the flow taps the Metro server in the launcher, dismisses the developer menu, and steps through any first-run onboarding. `flow-template.yaml` shows the pattern.
+- Expo and Metro: pass `--warm <bundle URL>` to the sweep. A cold bundle can outlast the dev client's load timeout ("Error loading app: timeout").
+- Windows: the setup report shows free commit memory. The emulator, Gradle and Maestro each reserve gigabytes, so stop unused dev servers when it is below 6 GB.
 - Before sweeping, confirm the app really calls the local API (for example the app's own log line naming the API origin). A URL in an env file is not proof.
 - Two device profiles, one small (360dp wide) and one large, named in the profile.
 - Flows live in `.maestro/visual/`, one file per screen, created from `flow-template.yaml` in this skill's folder. Shared steps (language, login) go in `.maestro/visual/subflows/`.

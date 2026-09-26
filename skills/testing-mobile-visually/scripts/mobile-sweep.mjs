@@ -5,11 +5,12 @@
 //
 // Usage: node mobile-sweep.mjs --flows .maestro/visual --app-id <id> --api-url <url>
 //          --locales en,ar [--out .visual-tests/mobile] [--only <text>] [--env KEY=VALUE ...]
+//          [--warm <dev bundle URL>]   request the bundle once first; a cold Metro build can outlast the app's load timeout
 // Exit 0: every flow passed and no JS errors. 1: failures (see manifest.json). 2: setup error.
 
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, readdirSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { copyFileSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+import { basename, join, resolve } from 'node:path';
 import { adbPath, maestroPath, toolEnv } from './tools.mjs';
 
 const argv = process.argv.slice(2);
@@ -35,13 +36,28 @@ const outDir = resolve(arg('out') ?? '.visual-tests/mobile', runId);
 const extraEnv = all('env').flatMap((kv) => ['-e', kv]);
 const manifest = { runId, appId, apiUrl: api.href, results: [] };
 
+const warm = arg('warm');
+if (warm) {
+  console.log('Warming the dev bundle (a cold build can take minutes) …');
+  const res = await fetch(warm).catch((e) => ({ ok: false, status: e.message }));
+  if (!res.ok) die(`Warm-up failed: ${res.status} ${warm}`);
+  await res.arrayBuffer();
+}
+
+// Maestro writes screenshots under --test-output-dir, nested by flow; collect them.
+const pngsUnder = (d) => readdirSync(d, { withFileTypes: true, recursive: true })
+  .filter((e) => e.isFile() && e.name.endsWith('.png'))
+  .map((e) => join(e.parentPath ?? e.path, e.name));
+
 for (const locale of locales) {
   const dir = join(outDir, locale);
   mkdirSync(dir, { recursive: true });
   for (const flow of flows) {
     if (adb) spawnSync(adb, ['logcat', '-c']);
-    // Screenshots are written relative to the working directory, so run inside the output folder.
-    const res = spawnSync(maestro, ['test', join(flowsDir, flow), '-e', `APP_ID=${appId}`, '-e', `LOCALE=${locale}`, ...extraEnv],
+    const name = flow.replace(/\.ya?ml$/, '');
+    const raw = join(dir, '.maestro-output', name);
+    mkdirSync(raw, { recursive: true });
+    const res = spawnSync(maestro, ['test', join(flowsDir, flow), '--test-output-dir', raw, '-e', `APP_ID=${appId}`, '-e', `LOCALE=${locale}`, ...extraEnv],
       { cwd: dir, env, shell: process.platform === 'win32', encoding: 'utf8' });
     const findings = [];
     if (res.status !== 0) findings.push({ check: 'flow-failed', detail: (res.stdout + res.stderr).split('\n').filter((l) => /fail|error|not found|assert/i.test(l)).slice(0, 5).join(' | ') });
@@ -49,8 +65,9 @@ for (const locale of locales) {
       const log = spawnSync(adb, ['logcat', '-d', '-s', 'ReactNativeJS:E', 'flutter:E', 'AndroidRuntime:E'], { encoding: 'utf8' }).stdout ?? '';
       for (const line of log.split('\n').filter((l) => /\sE\s/.test(l)).slice(0, 10)) findings.push({ check: 'app-error', detail: line.trim().slice(0, 300) });
     }
-    const name = flow.replace(/\.ya?ml$/, '');
-    const shots = readdirSync(dir).filter((f) => f.endsWith('.png') && f.startsWith(name)).map((f) => join(dir, f));
+    // Keep the flow's own takeScreenshot files (named after the flow), plus Maestro's failure capture.
+    const shots = pngsUnder(raw).filter((f) => basename(f).startsWith(name) || /takeScreenshot|failure|❌/i.test(f))
+      .map((f) => { const to = join(dir, `${name}-${basename(f)}`.replace(`${name}-${name}`, name)); copyFileSync(f, to); return to; });
     manifest.results.push({ flow, locale, status: res.status === 0 ? 'passed' : 'failed', screenshots: shots, findings });
     console.log(`${findings.length ? '✗' : '✓'} ${locale} ${flow}${findings.length ? ` (${findings.map((f) => f.check).join(', ')})` : ''}`);
   }

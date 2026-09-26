@@ -22,6 +22,14 @@ const jh = javaHome();
 const major = javaMajor(jh);
 row('Java 17+', major >= 17, major ? `${major} at ${jh}` : 'not found. Install a JDK 17+ (winget install Microsoft.OpenJDK.17 / brew install openjdk@17) or Android Studio.');
 
+// Windows commit headroom. The emulator, Gradle and Maestro each reserve gigabytes; with too
+// little free they fail with "paging file is too small" even when physical RAM is free.
+if (isWindows) {
+  const kb = Number(spawnSync('powershell', ['-NoProfile', '-Command', '(Get-CimInstance Win32_OperatingSystem).FreeVirtualMemory'], { encoding: 'utf8' }).stdout?.trim());
+  const gb = Math.round(kb / 1024 / 1024);
+  row('Free memory', gb >= 6, `${gb} GB commit free${gb < 6 ? '. Stop unused dev servers and IDE windows, or raise the paging file (System managed).' : ''}`);
+}
+
 // Android tools.
 row('adb', !!adbPath(), adbPath() ?? 'not found. Install Android SDK platform-tools (Android Studio > SDK Manager).');
 row('emulator', !!emulatorPath(), emulatorPath() ?? 'not found. Install the Android Emulator (Android Studio > SDK Manager).');

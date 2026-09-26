@@ -75,6 +75,8 @@ export function toolEnv() {
   env.JAVA_TOOL_OPTIONS ??= '-Xms64m -Xmx512m -XX:CompressedClassSpaceSize=128m -XX:ReservedCodeCacheSize=64m';
   const jh = javaHome();
   if (jh) env.JAVA_HOME = jh;
+  const sdk = androidSdk();
+  if (sdk) env.ANDROID_HOME ??= sdk;
   const dirs = [jh && join(jh, 'bin'), adbPath() && join(adbPath(), '..'), emulatorPath() && join(emulatorPath(), '..'), join(maestroHome(), 'bin')].filter(Boolean);
   const key = Object.keys(env).find((k) => k.toLowerCase() === 'path') ?? 'PATH';
   env[key] = [...dirs, env[key]].join(delimiter);
