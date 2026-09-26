@@ -1,0 +1,14 @@
+{
+  "name": "cleverways",
+  "description": "Cleverways engineering skills: issue investigation, issue resolution, release notes, translation alignment.",
+  "owner": {
+    "name": "mindmakr"
+  },
+  "plugins": [
+    {
+      "name": "cleverways",
+      "source": "./",
+      "description": "Evidence-first issue investigation and resolution, release notes and translation alignment, driven by each project's .agents/project-profile.md."
+    }
+  ]
+}

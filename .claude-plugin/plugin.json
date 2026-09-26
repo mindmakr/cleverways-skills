@@ -1,0 +1,11 @@
+{
+  "name": "cleverways",
+  "description": "Evidence-first issue investigation and resolution, release notes and translation alignment, driven by each project's .agents/project-profile.md.",
+  "author": {
+    "name": "mindmakr"
+  },
+  "homepage": "https://github.com/mindmakr/cleverways-skills",
+  "repository": "https://github.com/mindmakr/cleverways-skills",
+  "license": "MIT",
+  "keywords": ["issues", "investigation", "release-notes", "i18n", "translations", "workflow"]
+}
