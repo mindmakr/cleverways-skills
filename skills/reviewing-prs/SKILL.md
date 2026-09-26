@@ -25,10 +25,11 @@ The goal is a merge verdict backed by evidence: the PR fully covers its linked i
    - New findings get the next `R<n>` id, `status: open` and this round's number.
    - Earlier findings move to `fixed` only with evidence.
    - `wontfix` needs the user's decision recorded as a question.
+   - An answer that asks for a change becomes a finding and cites the question ("decided (Q2)").
    - Set `round + 1` and `reviewedSha = head`.
 7. **Post.**
    - Run `review-state.mjs put <pr> --file <state.json>` to update the tracking comment.
-   - Post one inline comment per new finding in a single review: `gh api repos/<repo>/pulls/<pr>/reviews` with `event: COMMENT` and a `comments[]` of path, line and body. Each body gives the ID, the problem, the fix and the pinned citation.
+   - Post one review with `gh api repos/<repo>/pulls/<pr>/reviews --input review.json`, with `commit_id` set to head and `event: COMMENT`. It puts an inline comment in `comments[]` (path, line, `side: RIGHT`) for each new finding on a line the diff changes, and every other finding in the review body. GitHub rejects inline comments outside the diff. Each finding gives its ID, severity, problem, fix and pinned citation.
    - Never approve, request changes or merge.
 8. **Verdict**, which is also the tracking comment's heading:
    - **READY TO MERGE:** every acceptance item is covered with evidence, no open finding is medium or higher, there are no open questions, `gh pr checks` is green, and linked PRs are aligned.
