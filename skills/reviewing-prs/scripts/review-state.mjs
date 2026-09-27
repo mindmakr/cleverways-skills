@@ -79,7 +79,8 @@ if (cmd === 'resolve') {
   const hide = (id, why) => run(`mutation($s:ID!){minimizeComment(input:{subjectId:$s,classifier:${why}}){minimizedComment{isMinimized}}}`, id);
 
   for (const t of p.reviewThreads.nodes) {
-    const id = t.comments.nodes[0]?.body.match(/^\*\*(R\d+) ·/)?.[1];
+    // The finding id opens the inline comment in bold: "**R5 · …", "**R5 (low)…", "**R5** …" or "**R5:".
+    const id = t.comments.nodes[0]?.body.match(/^\*\*(R\d+)\b/)?.[1];
     if (!id || t.isResolved || !done.has(id)) continue;
     run('mutation($s:ID!){resolveReviewThread(input:{threadId:$s}){thread{isResolved}}}', t.id);
     console.log(`resolved thread ${id}`);
