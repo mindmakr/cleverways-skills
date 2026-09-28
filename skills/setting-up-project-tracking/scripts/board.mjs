@@ -165,8 +165,11 @@ function ensureItem(board, profile, url, given) {
     .addProjectV2ItemById.item.id;
   const item = { id, status: null, content: { __typename: issue.pull_request ? 'PullRequest' : 'Issue', url, state: issue.state.toUpperCase() } };
   board.items.set(url, item);
-  if (!issue.pull_request) given.priority ??= priorityOf(issue.labels.map((l) => l.name)) ?? undefined;
-  given.platform ??= profile.platforms?.[repo.split('/')[1]];
+  // Only fill what is known: a label with no priority, or a repo that holds two platforms, leaves it unset.
+  const priority = issue.pull_request ? null : priorityOf(issue.labels.map((l) => l.name));
+  if (priority) given.priority ??= priority;
+  const platform = profile.platforms?.[repo.split('/')[1]];
+  if (platform) given.platform ??= platform;
   given.status ??= 'Backlog';
   return { item, done: ['added'] };
 }
