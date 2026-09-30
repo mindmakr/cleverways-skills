@@ -20,7 +20,7 @@
 // the keywords from PR bodies itself (Fixes / Closes / Resolves / Refs / Part of <ref>) and
 // writes the link into two text fields it creates when missing: "Pull request" on each issue
 // (e.g. "#575 open · #48 merged") and "Fixes" on each PR. Open PRs go on the board as their own
-// items, In review, with no Sprint, so the sprint board shows only issues. A PR approved on its
+// items, In review, in the sprint of the issue they name (else the current one). A PR approved on its
 // latest commit, or given READY TO MERGE by reviewing-prs on it, moves to Ready to merge with its issues.
 
 import { execFileSync } from 'node:child_process';
@@ -50,31 +50,48 @@ export function readProfile(path) {
   const sharedPath = shared && resolve(dirname(p), '..', shared);
   const base = sharedPath && existsSync(sharedPath) ? readProfile(sharedPath) : {};
   const section = (name) => text.split(/^## /m).find((s) => s.startsWith(name)) ?? '';
-  const repos = [...section('Repos').matchAll(/\|\s*`?([\w.-]+\/[\w.-]+)`?\s*\|/g)].map((m) => m[1]);
-  const platforms = {};
-  const line = section('Tracking').match(/Platform per repo:(.*)/)?.[1] ?? '';
-  for (const m of line.matchAll(/([\w.-]+)\s*→\s*(\w+)\s*(?=[,;.]|$)/g)) platforms[m[1]] = m[2];
+  const rows = [...section('Repos').matchAll(/\|\s*`?([\w.-]+\/[\w.-]+)`?\s*\|\s*(?:`([^`|]+)`)?/g)];
+  const repos = rows.map((m) => m[1]);
+  // "Local path" is relative to the repo that holds this profile (the folder above .agents/).
+  const localPaths = Object.fromEntries(rows.filter((m) => m[2]).map((m) => [m[1], resolve(dirname(p), '..', m[2].trim())]));
+  const tracking = section('Tracking');
+  const pairs = (name, value) => {
+    const out = {};
+    const line = tracking.match(new RegExp(`${name}:(.*)`))?.[1] ?? '';
+    for (const m of line.matchAll(new RegExp(`([\\w.-]+)\\s*→\\s*(${value})\\s*(?=[,;.]|$)`, 'g'))) out[m[1]] = m[2];
+    return out;
+  };
+  const platforms = pairs('Platform per repo', '\\w+');
+  const owners = pairs('Owners', '[\\w-]+');
+  const days = (k, d) => Number(tracking.match(new RegExp(`Thresholds:.*\\b${k}\\s+(\\d+)d`))?.[1] ?? base.thresholds?.[k] ?? d);
   return {
     board: text.match(/Board:\s*<?(https:\/\/github\.com\/(?:users|orgs)\/[^/\s>]+\/projects\/\d+)/)?.[1] ?? base.board,
     repos: repos.length ? repos : base.repos ?? [],
+    localPaths: Object.keys(localPaths).length ? localPaths : base.localPaths ?? {},
     prBase: text.match(/PR base(?: branch)?:\s*`?([\w./-]+)`?/)?.[1] ?? base.prBase,
     platforms: Object.keys(platforms).length ? platforms : base.platforms ?? {},
+    owners: { ...base.owners, ...owners },
+    statusPage: tracking.match(/Status page:\s*<?(https:\/\/\S+?)>?\s*$/m)?.[1] ?? base.statusPage,
+    thresholds: { stuck: days('stuck', 3), stale: days('stale', 30), abandoned: days('abandoned', 30) },
   };
 }
 
 // ---------- board ----------
 
-const ITEM = `id
+const ITEM = `id updatedAt
   status: fieldValueByName(name:"Status"){... on ProjectV2ItemFieldSingleSelectValue{name}}
+  size: fieldValueByName(name:"Size"){... on ProjectV2ItemFieldSingleSelectValue{name}}
   release: fieldValueByName(name:"Release"){... on ProjectV2ItemFieldSingleSelectValue{name}}
   priority: fieldValueByName(name:"Priority"){... on ProjectV2ItemFieldSingleSelectValue{name}}
   sprint: fieldValueByName(name:"Sprint"){... on ProjectV2ItemFieldIterationValue{title startDate duration}}
   prText: fieldValueByName(name:"Pull request"){... on ProjectV2ItemFieldTextValue{text}}
   fixesText: fieldValueByName(name:"Fixes"){... on ProjectV2ItemFieldTextValue{text}}
   content{__typename
-    ... on Issue{url number title state stateReason repository{nameWithOwner}
-      assignees(first:1){totalCount} parent{url} subIssuesSummary{total completed}}
-    ... on PullRequest{url number title state isDraft repository{nameWithOwner}
+    ... on Issue{url number title state stateReason repository{nameWithOwner} createdAt updatedAt
+      assignees(first:10){totalCount nodes{login}} labels(first:20){nodes{name}} parent{url}
+      subIssuesSummary{total completed} issueDependenciesSummary{blocking blockedBy}}
+    ... on PullRequest{url number title state isDraft repository{nameWithOwner} createdAt updatedAt
+      assignees(first:10){totalCount nodes{login}} labels(first:20){nodes{name}}
       reviewRequests(first:1){totalCount} reviews(first:1){totalCount}}}`;
 
 export function openBoard(url) {
@@ -115,6 +132,16 @@ function iteration(board, which) {
   return its.find((i) => i.title === which);
 }
 
+// A PR sits in the sprint of the first issue it names that has one, else the current sprint,
+// so the sprint board shows the PRs being worked on. Returns a title, 'current', or null.
+export function sprintForPr(board, issueUrls) {
+  for (const u of issueUrls) {
+    const title = findItem(board, u)?.sprint?.title;
+    if (title) return title;
+  }
+  return iteration(board, 'current') ? 'current' : null;
+}
+
 export function priorityOf(labels) {
   const l = labels.map((x) => x.toLowerCase());
   const has = (...keys) => l.some((x) => keys.some((k) => x === k || x.includes(`priority: ${k}`) || x.includes(`priority/${k}`)));
@@ -124,12 +151,26 @@ export function priorityOf(labels) {
   return null;
 }
 
-const urlOf = (ref) => {
+export const urlOf = (ref) => {
   if (ref.startsWith('https://')) return ref;
   const [repo, n] = ref.split('#');
   return `https://github.com/${repo}/issues/${n}`;
 };
-const short = (url) => url.replace('https://github.com/', '').replace(/\/(issues|pull)\//, '#');
+export const short = (url) => url.replace('https://github.com/', '').replace(/\/(issues|pull)\//, '#');
+
+// A ref does not say whether it is an issue or a PR, and the board keys PRs by their /pull/ URL,
+// so look up both forms.
+export function findItem(board, ref) {
+  const url = urlOf(ref);
+  return board.items.get(url) ?? board.items.get(url.replace(/\/(issues|pull)\//, (m, k) => (k === 'issues' ? '/pull/' : '/issues/')));
+}
+
+// The reviewing-prs tracker state on a PR (verdict, reviewedSha, findings), or null without one.
+export function reviewState(repo, number) {
+  const comments = JSON.parse(gh(['api', '--paginate', '--slurp', `repos/${repo}/issues/${number}/comments`])).flat();
+  const json = comments.find((x) => x.body?.includes('<!-- cleverways:pr-review -->'))?.body.match(/<!-- state\n([\s\S]*?)\n-->/)?.[1];
+  return json ? JSON.parse(json) : null;
+}
 
 // Returns a description of the change, or a line starting with "!" when it could not be made.
 function edit(board, item, name, value) {
@@ -157,14 +198,14 @@ function edit(board, item, name, value) {
 }
 
 function ensureItem(board, profile, url, given) {
-  const existing = board.items.get(url);
+  const existing = findItem(board, url);
   if (existing) return { item: existing, done: [] };
   const [, repo, n] = url.match(/github\.com\/([^/]+\/[^/]+)\/(?:issues|pull)\/(\d+)/);
   const issue = JSON.parse(gh(['api', `repos/${repo}/issues/${n}`]));
   const id = gql(`mutation{addProjectV2ItemById(input:{projectId:${JSON.stringify(board.id)},contentId:${JSON.stringify(issue.node_id)}}){item{id}}}`)
     .addProjectV2ItemById.item.id;
-  const item = { id, status: null, content: { __typename: issue.pull_request ? 'PullRequest' : 'Issue', url, state: issue.state.toUpperCase() } };
-  board.items.set(url, item);
+  const item = { id, status: null, content: { __typename: issue.pull_request ? 'PullRequest' : 'Issue', url: issue.html_url, state: issue.state.toUpperCase() } };
+  board.items.set(issue.html_url, item);
   // Only fill what is known: a label with no priority, or a repo that holds two platforms, leaves it unset.
   const priority = issue.pull_request ? null : priorityOf(issue.labels.map((l) => l.name));
   if (priority) given.priority ??= priority;
@@ -217,9 +258,7 @@ export function sync(board, profile, { dry = false, closeMerged = false } = {}) 
   const readyToMerge = (repo, pr) => {
     if (!hasReady || pr.isDraft || pr.reviewDecision === 'CHANGES_REQUESTED') return false;
     if (pr.reviewDecision === 'APPROVED') return true;
-    const comments = JSON.parse(gh(['api', '--paginate', '--slurp', `repos/${repo}/issues/${pr.number}/comments`])).flat();
-    const json = comments.find((x) => x.body?.includes('<!-- cleverways:pr-review -->'))?.body.match(/<!-- state\n([\s\S]*?)\n-->/)?.[1];
-    const state = json ? JSON.parse(json) : null;
+    const state = reviewState(repo, pr.number);
     return Boolean(state?.verdict?.startsWith('READY TO MERGE') && state.reviewedSha === pr.headRefOid);
   };
   for (const repo of profile.repos) {
@@ -229,8 +268,10 @@ export function sync(board, profile, { dry = false, closeMerged = false } = {}) 
       for (const u of refs) push(openPR, u, pr);
       const it = board.items.get(pr.url), fixes = refs.map((u) => shortIn(u, repo)).join(' · ');
       const want = pr.ready ? 'Ready to merge' : 'In review';
-      if (!it) act(`${short(pr.url)}: add PR to the board (${want})`, () => set(pr.url, { status: want, fixesText: fixes }));
+      const sprint = it?.sprint ? undefined : sprintForPr(board, refs) ?? undefined;
+      if (!it) act(`${short(pr.url)}: add PR to the board (${want}${sprint ? `, ${sprint} sprint` : ''})`, () => set(pr.url, { status: want, fixesText: fixes, sprint }));
       else {
+        if (sprint) act(`${short(pr.url)}: PR Sprint → ${sprint}`, () => set(pr.url, { sprint }));
         if (it.status?.name !== want) act(`${short(pr.url)}: PR ${it.status?.name ?? 'no status'} → ${want}`, () => set(pr.url, { status: want }));
         if (links && (it.fixesText?.text ?? '') !== fixes) act(`${short(pr.url)}: Fixes "${fixes}"`, () => set(pr.url, { fixesText: fixes }));
       }
@@ -331,7 +372,7 @@ function main() {
   if (cmd === 'set')
     setItems(board, profile, refs, { status: flags.status, sprint: flags.sprint, release: flags.release, priority: flags.priority, size: flags.size, platform: flags.platform });
   else if (cmd === 'show') {
-    const it = board.items.get(urlOf(refs[0]));
+    const it = findItem(board, refs[0]);
     console.log(it ? JSON.stringify({ status: it.status?.name, priority: it.priority?.name, release: it.release?.name, sprint: it.sprint?.title, state: it.content.state }, null, 1) : 'Not on the board.');
   } else if (cmd === 'list') {
     const want = flags.status?.split(',').map((s) => s.trim());
