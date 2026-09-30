@@ -97,7 +97,7 @@ const ITEM = `id updatedAt
 export function openBoard(url) {
   const [, kind, login, number] = url.match(/github\.com\/(users|orgs)\/([^/]+)\/projects\/(\d+)/);
   const root = kind === 'orgs' ? 'organization' : 'user';
-  const p = gql(`query($l:String!,$n:Int!){${root}(login:$l){projectV2(number:$n){id url
+  const p = gql(`query($l:String!,$n:Int!){${root}(login:$l){projectV2(number:$n){id url title
     fields(first:50){nodes{... on ProjectV2FieldCommon{id name dataType} ... on ProjectV2SingleSelectField{options{id name}}
       ... on ProjectV2IterationField{configuration{iterations{id title startDate duration} completedIterations{id title startDate duration}}}}}
     workflows(first:20){nodes{name enabled}}}}}`, { l: login, n: Number(number) })[root].projectV2;

@@ -130,7 +130,7 @@ export function buildReport(profile, url, now = Date.now()) {
   }
   for (const [u] of health) if (!board.items.has(u)) errors.push(`${short(u)}: open PR not on the board (board.mjs sync adds it)`);
   return {
-    generatedAt: new Date(now).toISOString(), board: { url, currentSprint: current },
+    generatedAt: new Date(now).toISOString(), board: { url, title: board.title, currentSprint: current },
     releaseOrder: (board.field('Release')?.options ?? []).map((o) => o.name),
     owners: profile.owners, thresholds: profile.thresholds,
     sprint: sprintStats(items, iterations, now), items, errors,
