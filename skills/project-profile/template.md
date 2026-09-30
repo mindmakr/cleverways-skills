@@ -76,6 +76,9 @@ Shared: <path to another repo's profile, or delete this line>
 - Platform per repo: <repo> → <Backend / Web / Mobile>, <repo> → <…>. Write "<A> or <B> (by layer)" for a repo that holds two, and the board script leaves Platform to the caller
 - Releases: Release field values <v1.0.0, v1.1.0>. Milestones are epics (planning-epics)
 - Sprints: <N days, starting <day>, Sprint 1 from YYYY-MM-DD> or kanban
+- Owners: <repo> → <GitHub login>, <repo> → <…>. running-scrum assigns unowned issues and PRs to them
+- Status page: <URL of the running-scrum status page, once published>
+- Thresholds: stuck 3d, stale 30d, abandoned 30d (optional; these are the defaults running-scrum uses)
 
 ## Terms
 

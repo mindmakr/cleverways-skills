@@ -15,6 +15,7 @@ Agent skills for everyday engineering work. They are generic: each project descr
 | `reviewing-prs` | Review a PR against its linked issues and the project rules until it is ready to merge; findings and questions are tracked in one comment on the PR. Every round runs a local security scan (gitleaks, Semgrep, osv-scanner through Docker) on what the PR adds, and checks changed workflows for the limits that stop a broken build burning a month of CI minutes (`workflow-limits.mjs`, also run by CI) |
 | `writing-release-notes` | Draft a GitHub release per repo, plus a plain-language page for stakeholders |
 | `setting-up-project-tracking` | One GitHub Project across the repos: sprints, a Release field, and scrum, backlog, roadmap, release-notes, bug-triage and pull-request views. Its `board.mjs` keeps the board live: every skill moves cards as it acts, and `sync` repairs hand-made drift |
+| `running-scrum` | Run the board through rituals (standup, planning, refinement, PR triage, sprint close, release): sync it, assign owners, name what is stuck, re-check old issues before they enter a sprint, and keep one status page. It never merges, deploys or tags |
 | `managing-translations` | Check locale parity, fix missing or untranslated keys, add a language |
 | `testing-web-visually` | Sweep a locally running web app with Playwright across roles, locales and screen sizes; review the screenshots |
 | `testing-mobile-visually` | Sweep a mobile app (Expo, React Native, Flutter, native) on a local emulator with Maestro |
@@ -33,6 +34,7 @@ fix review      fixing-issues #<pr>                                      → ope
 verify          verifying-fixes                                             → acceptance items checked with evidence → close or reopen
 test            testing-web-visually / testing-mobile-visually              → screenshots → reporting-visual-defects → visual-test issues
 track           setting-up-project-tracking                                 → one board: sprints, Release field, six views; board.mjs sync keeps it live
+run             running-scrum <ritual>                                      → board in order, owners named, stale issues refreshed, status page
 ship            writing-release-notes                                       → GitHub releases (changes, testers, devops) + stakeholder page
 always          project-profile, writing-plainly, managing-translations
 ```
@@ -45,7 +47,8 @@ always          project-profile, writing-plainly, managing-translations
 | Reviewer | `reviewing-prs #<pr>` | The verdict is READY TO MERGE, or BLOCKED ON a named person |
 | Developer, after review | `fixing-issues #<pr>` fixes the open findings on the same branch and replies "Fixed in `<sha>`" | The next `reviewing-prs` round finds nothing open |
 | Tester | `testing-web-visually` / `testing-mobile-visually`, then `verifying-fixes #<issue>` after merge | Every acceptance item passed (issue closed), or the failure is recorded (issue reopened) |
-| Release owner | `writing-release-notes` | Draft releases with sections for testers and devops, plus a stakeholder page |
+| Scrum master | `running-scrum standup` daily, `planning` at sprint start, `sprint-close` at the end | Every open item has an owner and the status page is current |
+| Release owner | `running-scrum release`, which runs `writing-release-notes` | Draft releases with sections for testers and devops, plus a stakeholder page |
 
 ### The review-fix loop
 
@@ -113,6 +116,7 @@ Type the slash command, or describe the task in words; the agent picks the skill
 | testing-web-visually | `/cleverways:testing-web-visually the declined screens` | Screenshots per role, locale and size, automatic checks, a visual review, and `visual-test` issues. Local stack only. |
 | testing-mobile-visually | `/cleverways:testing-mobile-visually` | The same for the app, on a local emulator. |
 | setting-up-project-tracking | `/cleverways:setting-up-project-tracking` | A GitHub Project across the profile's repos with sprints, a Release field and six views, the open issues and PRs on it, and a release-notes config PR per repo. "Sync the board" brings an existing board up to date. |
+| running-scrum | `/cleverways:running-scrum standup` (or `planning`, `refinement`, `pr-triage`, `sprint-close`, `release`; add `--dry` to only list changes) | The board synced, unowned work assigned, stuck and conflicting items named with their owner, old issues re-checked before they enter a sprint, and one status page. It never merges, deploys or tags. |
 | project-profile | "set up the project profile" | `.agents/project-profile.md`, filled from the repo plus your answers. |
 
 Other agents: name the skill in plain words, for example "use the investigating-issues skill on this report".

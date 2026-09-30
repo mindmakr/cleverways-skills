@@ -57,14 +57,14 @@ Every ritual starts with `scrum.mjs report` and ends by updating the status page
 | planning | sprint start | Ranks the backlog (`scrum.mjs rank`). Proposes the sprint list, sized against the last sprint's completed count. Runs the stale check on every issue pulled in. Sets Sprint, Status Ready and assignee. |
 | refinement | mid-sprint | Lists backlog issues missing Priority, Size or Release, likely duplicates, and issues with no acceptance list. Runs the stale check on the top of the next sprint's ranked list. |
 | pr-triage | any time | Conflicts; superseded Dependabot PRs (a newer Dependabot PR or a merged change covers the same packages); PRs with no activity past the abandoned threshold. Closes the last two with a reason. Gives each PR its issue's sprint, else the current one. |
-| sprint-close | last day of a sprint | Moves every card not Done, including On test, to the next sprint (rollover; run after the sprint ended, that is the current one). Records planned, done and carried counts. Writes a short retro: what slipped and who it was blocked on. |
+| sprint-close | last day of a sprint | Moves every card not Done, including On test, to the next sprint (rollover; run after the sprint ended, that is the current one). Records planned, done, On test and rolled-over counts. Writes a short retro: what slipped and who it was blocked on. |
 | release | before a promotion | Checks the Release field against what has merged into the base. Runs writing-release-notes for drafts. Writes a go/no-go list: open High items in the release, On test cards not verified, pending migrations or environment changes named in merged PRs. A person tags and deploys. |
 
 ## Ranking rule
 
 `scrum.mjs rank` sorts open issues not Done, and prints each with the reason for its position:
 
-1. nearest Release first (release order as the profile lists it); issues with no Release come last;
+1. nearest Release first (the order of the Release field's options on the board); issues with no Release come last;
 2. within a release, issues with an open PR (finish before start);
 3. then `security` label or priority High;
 4. then issues that block other open issues (sub-issue parents, and "blocked by" links);
@@ -75,7 +75,7 @@ The same input always gives the same order.
 
 ## Stale check
 
-`scrum.mjs stale <ref>` reads the issue body and comments for `path:line` citations and commit SHAs or links (the evidence investigating-issues writes). Evidence SHA = the newest SHA cited; with none, the time of the newest comment that has citations.
+The stale check lives in `scripts/stale.mjs`. `scrum.mjs stale <ref>` reads the issue body and comments for `path:line` citations and commit SHAs or links (the evidence investigating-issues writes). Evidence point = the newest cited SHA that is on the base branch (a SHA from a PR branch or an unrelated branch does not count); with none, the time of the newest comment that has citations.
 
 For each repo the profile lists, it runs `git log <evidence>..origin/<base> -- <cited files>` and prints one of:
 
@@ -111,7 +111,8 @@ It updates the acceptance list when the scope shrank. When the verdict is "no lo
               "review-behind-head", "abandoned", "not-started"],
     "unknown": [field names the API failed to return]
   }],
-  "sprint": { "planned", "done", "carried" }
+  "sprint": { "current", "planned", "done", "onTest", "inProgress", "previous", "previousDone" },
+  "releaseOrder", "owners", "thresholds", "errors"
 }
 ```
 
@@ -119,7 +120,7 @@ It updates the acceptance list when the scope shrank. When the verdict is "no lo
 
 ## Status page
 
-`status-page.mjs --report report.json --notes notes.md --out page.html` writes one self-contained HTML page: no external scripts, light and dark themes, readable at phone width. Sections: sprint progress (planned, done, carried), blockers with owners, PRs ready to merge, stale or needs-refresh issues, open questions for the user, the last ritual run with its time and the writes it made.
+`status-page.mjs --report report.json --notes notes.md --out page.html` writes one self-contained HTML page: no external scripts, light and dark themes, readable at phone width. Sections: sprint progress (planned, in progress, on test, done, and the previous sprint's done count), blockers with owners, PRs ready to merge, stale or needs-refresh issues, open questions for the user, the last ritual run with its time and the writes it made.
 
 - In Claude Code: publish as an Artifact. The first run records `Status page: <url>` in the profile's Tracking section, and later runs update that URL.
 - Other agents: write the file and give its path.
