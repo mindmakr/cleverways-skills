@@ -9,7 +9,7 @@ Goal: the board shows what is true now, and every problem has a named owner.
 | Flag | Action |
 |---|---|
 | unassigned | Assign the profile's owner for the repo. No owner in the profile: Needs a person, owner "no repo owner" |
-| review-behind-head | Run reviewing-prs on the PR, at most three per standup, oldest head first. Dependabot PRs go to pr-triage instead |
+| review-behind-head | Run reviewing-prs on the PR, at most three per standup, oldest head first. Skip PRs with a conflict (they need a rebase first) and Dependabot PRs (pr-triage) |
 | conflict, checks-failing | Needs a person, owner = PR author. Dependabot PRs go to pr-triage |
 | stuck | Needs a person, owner = assignee, with the status and days in it |
 | not-started | Needs a person. Past three quarters of the sprint, ask whether it stays in the sprint |
