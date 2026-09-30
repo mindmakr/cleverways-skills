@@ -49,6 +49,17 @@ test('a PR with no linked sprint takes the current sprint', () => {
   assert.equal(sprintForPr(sprintBoard(), []), 'current');
 });
 
+test('a PR never lands in a finished sprint; it takes the current one', () => {
+  const b = sprintBoard();
+  const conf = b.field('Sprint').configuration;
+  const sprint = { configuration: {
+    iterations: conf.iterations.filter((i) => i.title !== 'Sprint 0'),
+    completedIterations: conf.iterations.filter((i) => i.title === 'Sprint 0'),
+  } };
+  b.field = (n) => (n === 'Sprint' ? sprint : undefined);
+  assert.equal(sprintForPr(b, ['https://github.com/o/r/issues/5']), 'current');
+});
+
 test('a PR gets no sprint when there is none to give', () => {
   assert.equal(sprintForPr(sprintBoard(false), []), null);
 });

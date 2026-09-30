@@ -30,6 +30,11 @@ test('parseEvidence keeps route-group brackets in paths, inside markdown links a
   assert.deepEqual(e.files.sort(), ['app/(auth)/(tabs)/profile.tsx', 'frontend/src/app/(dashboard)/profile/page.tsx']);
 });
 
+test('parseEvidence drops paths outside the repo (../ or absolute)', () => {
+  const e = parseEvidence([{ body: 'See ../payday-web-nextjs/backend/x.ts:12 and /etc/app/conf.ts:3 and api/y.ts:1', createdAt: '2026-09-01T00:00:00Z' }]);
+  assert.deepEqual(e.files, ['api/y.ts']);
+});
+
 test('parseEvidence ignores agent config folders', () => {
   const e = parseEvidence([{ body: 'Rule in .agents/project-profile.md and .claude/settings.json; code in api/x.ts:3', createdAt: '2026-09-01T00:00:00Z' }]);
   assert.deepEqual(e.files, ['api/x.ts']);

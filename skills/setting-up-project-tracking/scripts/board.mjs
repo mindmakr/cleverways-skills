@@ -138,9 +138,11 @@ export function iteration(board, which, now = Date.now()) {
 // A PR sits in the sprint of the first issue it names that has one, else the current sprint,
 // so the sprint board shows the PRs being worked on. Returns a title, 'current', or null.
 export function sprintForPr(board, issueUrls) {
+  const active = board.field('Sprint')?.configuration?.iterations ?? [];
   for (const u of issueUrls) {
     const title = findItem(board, u)?.sprint?.title;
-    if (title) return title;
+    // A finished sprint is off the sprint board, so a PR there would be hidden.
+    if (title && active.some((i) => i.title === title)) return title;
   }
   return iteration(board, 'current') ? 'current' : null;
 }

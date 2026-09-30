@@ -16,8 +16,9 @@ function tidy(path) {
   while (p.endsWith(')') && count(p, ')') > count(p, '(')) p = p.slice(0, -1);
   return p;
 }
-// Agent instructions and settings are not the code an issue is about.
-const IGNORED = /^\.(agents|claude)\//;
+// Agent instructions and settings are not the code an issue is about, and a path outside the
+// repo (../sibling, /absolute) cannot be looked up in its history.
+const IGNORED = /^(\.(agents|claude)\/|\.\.\/|\/)/;
 
 // texts: [{ body, createdAt }] — the issue body and its comments.
 export function parseEvidence(texts) {
@@ -78,7 +79,7 @@ export function staleReport(profile, ref, now = Date.now()) {
     if (!ok(dir, ['rev-parse', '--git-dir'])) { repos.push({ repo: name, error: `no git repo at ${dir}` }); continue; }
     ok(dir, ['fetch', '-q', 'origin', base]);
     const ref = baseRef(dir, base);
-    const files = e.files.filter((f) => git(dir, ['log', '-1', '--format=%h', ref, '--', f]));
+    const files = e.files.filter((f) => { try { return git(dir, ['log', '-1', '--format=%h', ref, '--', f]); } catch { return false; } });
     if (!files.length) continue;
     const since = evidencePoint(dir, base, e.shas, e.evidenceAt);
     repos.push({ repo: name, base: ref, since, files, changed: since ? changedSince(dir, base, since, files) : [] });
