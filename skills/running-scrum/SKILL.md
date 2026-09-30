@@ -45,4 +45,4 @@ Never approve, merge, deploy, tag or publish a release. Anything else goes under
 
 ## Ranking
 
-`scrum.mjs rank` orders open issues: nearest Release first, then issues with an open PR, then security or High, then issues that block others, then Medium, Low, unset, then oldest. Plan and refine in that order.
+`scrum.mjs rank` orders open issues: nearest Release, then open PR, security or High, blocking others, Medium, Low, oldest. Plan and refine in that order.
