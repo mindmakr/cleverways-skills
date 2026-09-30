@@ -99,7 +99,7 @@ export function openBoard(url) {
   const root = kind === 'orgs' ? 'organization' : 'user';
   const p = gql(`query($l:String!,$n:Int!){${root}(login:$l){projectV2(number:$n){id url
     fields(first:50){nodes{... on ProjectV2FieldCommon{id name dataType} ... on ProjectV2SingleSelectField{options{id name}}
-      ... on ProjectV2IterationField{configuration{iterations{id title startDate duration}}}}}
+      ... on ProjectV2IterationField{configuration{iterations{id title startDate duration} completedIterations{id title startDate duration}}}}}
     workflows(first:20){nodes{name enabled}}}}}`, { l: login, n: Number(number) })[root].projectV2;
   const field = (name) => p.fields.nodes.find((f) => f.name === name);
   const items = new Map();
@@ -124,12 +124,15 @@ function ensureTextField(board, name, dry) {
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
-const endOf = (it) => new Date(Date.parse(`${it.startDate}T00:00:00Z`) + it.duration * 864e5).toISOString().slice(0, 10);
-function iteration(board, which) {
-  const its = board.field('Sprint')?.configuration?.iterations ?? [];
-  if (which === 'current') return its.find((i) => i.startDate <= today() && today() < endOf(i));
-  if (which === 'next') return its.find((i) => i.startDate > today());
-  return its.find((i) => i.title === which);
+export const endOf = (it) => new Date(Date.parse(`${it.startDate}T00:00:00Z`) + it.duration * 864e5).toISOString().slice(0, 10);
+// Sprints by title, 'current' or 'next'. `now` (ms) lets callers and tests fix the date.
+export function iteration(board, which, now = Date.now()) {
+  const day = new Date(now).toISOString().slice(0, 10);
+  const conf = board.field('Sprint')?.configuration;
+  const its = conf?.iterations ?? [];
+  if (which === 'current') return its.find((i) => i.startDate <= day && day < endOf(i));
+  if (which === 'next') return its.find((i) => i.startDate > day);
+  return [...its, ...(conf?.completedIterations ?? [])].find((i) => i.title === which);
 }
 
 // A PR sits in the sprint of the first issue it names that has one, else the current sprint,
