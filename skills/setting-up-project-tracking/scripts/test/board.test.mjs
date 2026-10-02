@@ -3,7 +3,19 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { findItem, readProfile, setItems, sprintForPr } from '../board.mjs';
+import { findItem, prsOnBase, readProfile, setItems, sprintForPr } from '../board.mjs';
+
+test('PRs stacked on another PR count as PRs into the base; unrelated bases do not', () => {
+  const prs = [
+    { number: 98, baseRefName: 'test', headRefName: 'fix/96' },
+    { number: 99, baseRefName: 'fix/96', headRefName: 'fix/88' },
+    { number: 100, baseRefName: 'fix/88', headRefName: 'fix/86' },
+    { number: 7, baseRefName: 'main', headRefName: 'hotfix' },
+    { number: 8, baseRefName: 'hotfix', headRefName: 'hotfix-2' },
+  ];
+  assert.deepEqual(prsOnBase(prs, 'test').map((p) => p.number).sort(), [100, 98, 99].sort());
+  assert.deepEqual(prsOnBase(prs, undefined).map((p) => p.number).length, 5, 'no base in the profile keeps every PR');
+});
 
 const prUrl = 'https://github.com/o/r/pull/97';
 const board = () => ({

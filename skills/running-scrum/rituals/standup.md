@@ -8,12 +8,16 @@ Goal: the board shows what is true now, and every problem has a named owner.
 
 | Flag | Action |
 |---|---|
-| unassigned | Assign the profile's owner for the repo. No owner in the profile: Needs a person, owner "no repo owner" |
+| unassigned | Issues the profile's `Agents:` rule covers go to step 4. Others: assign the profile's owner for the repo; no owner in the profile, Needs a person, owner "no repo owner" |
 | review-behind-head | Run reviewing-prs on the PR, at most three per standup, oldest head first. Skip PRs with a conflict (they need a rebase first) and Dependabot PRs (pr-triage) |
 | conflict, checks-failing | Needs a person, owner = PR author. Dependabot PRs go to pr-triage |
 | stuck | Needs a person, owner = assignee, with the status and days in it |
 | not-started | Needs a person. Past three quarters of the sprint, ask whether it stays in the sprint |
 | abandoned | pr-triage handles it |
 
-4. Run pr-triage.
-5. Notes: `## Changed`, `## Needs a person` grouped by owner, `## Questions for you`, then `## Today` with the sprint numbers (planned, in progress, on test, done) and the three highest-ranked Ready issues nobody has started.
+4. **Coding agents**, when the profile has an `Agents:` line. For each open, unassigned issue in the current sprint that its rule covers:
+   - Before: the issue needs code evidence (`path:line`) and an acceptance list, and the stale check (`rituals/stale-check.md`) must end "unchanged" or "still valid". Missing either: give it to the repo owner instead, and say why under Needs a person.
+   - Hand over: assign the agent's login, and comment (marked) that running-scrum handed it over under the profile's rule.
+   - After: the agent's PR is reviewed like any other (step 3, review-behind-head). When its review is NEEDS FIXES, comment `@<agent login> please fix the open findings in the review tracker` once per round. Nobody merges it without a person.
+5. Run pr-triage.
+6. Notes: `## Changed`, `## Needs a person` grouped by owner, `## Questions for you`, then `## Today` with the sprint numbers (planned, in progress, on test, done) and the three highest-ranked Ready issues nobody has started.

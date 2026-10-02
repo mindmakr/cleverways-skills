@@ -36,7 +36,7 @@ With `--dry`, write "Would change" instead of "Changed" and make no write.
 
 Without asking:
 - Status, Sprint, Priority, Size and Release on the board, through `board.mjs set` and `board.mjs sync`;
-- assigning an issue or PR to the profile's owner for its repo (`gh api -X POST repos/<repo>/issues/<n>/assignees -f "assignees[]=<login>"`; `gh pr edit` fails on some repos);
+- assigning an issue or PR to the profile's owner for its repo, or an issue to a coding agent under the profile's `Agents:` rule (`gh api -X POST repos/<repo>/issues/<n>/assignees -f "assignees[]=<login>"`; `gh pr edit` fails on some repos);
 - running reviewing-prs on a PR with no review round on its head commit;
 - commenting on and closing PRs as pr-triage says, each close with a comment that gives the reason;
 - the stale check (`rituals/stale-check.md`) on every issue that enters a sprint: its "Refreshed" comment, and trimming the acceptance list to what is still open.
@@ -45,4 +45,4 @@ Never approve, merge, deploy, tag or publish a release. Anything else goes under
 
 ## Ranking
 
-`scrum.mjs rank` orders open issues: nearest Release, then open PR, security or High, blocking others, Medium, Low, oldest. Plan and refine in that order.
+`scrum.mjs rank` orders open issues: nearest Release, open PR, security or High, blockers, Medium, Low, oldest.
