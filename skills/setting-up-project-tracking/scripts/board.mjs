@@ -235,6 +235,18 @@ export function setItems(board, profile, refs, values, log = console.log) {
 
 // ---------- sync ----------
 
+// Open PRs into the base, plus PRs stacked on them (a PR whose base is another such PR's
+// branch), so a chain of PRs is tracked like the first one in it. No base keeps every PR.
+export function prsOnBase(prs, base) {
+  if (!base) return prs;
+  const heads = new Set([base]), kept = new Set();
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const p of prs) if (!kept.has(p) && heads.has(p.baseRefName)) { kept.add(p); heads.add(p.headRefName); grew = true; }
+  }
+  return prs.filter((p) => kept.has(p));
+}
+
 const REF = /\b(?:fix(?:es|ed)?|close[sd]?|resolve[sd]?|refs?|part of)\s*:?\s+((?:[\w.-]+\/[\w.-]+)?#\d+)/gi;
 const prRefs = (pr, repo) => [...(pr.body ?? '').matchAll(REF)].map((m) => urlOf(m[1].startsWith('#') ? `${repo}${m[1]}` : m[1]));
 
@@ -267,7 +279,8 @@ export function sync(board, profile, { dry = false, closeMerged = false } = {}) 
     return Boolean(state?.verdict?.startsWith('READY TO MERGE') && state.reviewedSha === pr.headRefOid);
   };
   for (const repo of profile.repos) {
-    for (const pr of JSON.parse(gh(['pr', 'list', '-R', repo, '-s', 'open', '-L', '200', ...base, '--json', 'url,number,body,isDraft,reviewRequests,latestReviews,reviewDecision,headRefOid']))) {
+    const open = JSON.parse(gh(['pr', 'list', '-R', repo, '-s', 'open', '-L', '200', '--json', 'url,number,body,isDraft,reviewRequests,latestReviews,reviewDecision,headRefOid,baseRefName,headRefName']));
+    for (const pr of prsOnBase(open, profile.prBase)) {
       const refs = prRefs(pr, repo);
       pr.ready = readyToMerge(repo, pr);
       for (const u of refs) push(openPR, u, pr);

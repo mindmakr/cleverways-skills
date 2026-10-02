@@ -79,6 +79,7 @@ Shared: <path to another repo's profile, or delete this line>
 - Owners: <repo> → <GitHub login>, <repo> → <…>. running-scrum assigns unowned issues and PRs to them
 - Status page: <URL of the running-scrum status page, once published>
 - Thresholds: stuck 3d, stale 30d, abandoned 30d (optional; these are the defaults running-scrum uses)
+- Agents: <agent login> takes <which issues>, for example "Copilot takes mobile issues that are not High or security, and Low issues elsewhere that are not security" (optional; running-scrum standup hands those issues over)
 
 ## Terms
 
