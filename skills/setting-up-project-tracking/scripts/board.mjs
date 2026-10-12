@@ -20,7 +20,8 @@
 // the keywords from PR bodies itself (Fixes / Closes / Resolves / Refs / Part of <ref>) and
 // writes the link into two text fields it creates when missing: "Pull request" on each issue
 // (e.g. "#575 open · #48 merged") and "Fixes" on each PR. Open PRs go on the board as their own
-// items, In review, in the sprint of the issue they name (else the current one). A PR approved on its
+// items, In review, in the sprint of the issue they name (else the current one). Only Fixes,
+// Closes and Resolves move an issue's Status or ask to close it; Refs and Part of only link. A PR approved on its
 // latest commit, or given READY TO MERGE by reviewing-prs on it, moves to Ready to merge with its issues.
 
 import { execFileSync } from 'node:child_process';
@@ -247,8 +248,10 @@ export function prsOnBase(prs, base) {
   return prs.filter((p) => kept.has(p));
 }
 
-const REF = /\b(?:fix(?:es|ed)?|close[sd]?|resolve[sd]?|refs?|part of)\s*:?\s+((?:[\w.-]+\/[\w.-]+)?#\d+)/gi;
-const prRefs = (pr, repo) => [...(pr.body ?? '').matchAll(REF)].map((m) => urlOf(m[1].startsWith('#') ? `${repo}${m[1]}` : m[1]));
+const REF = /\b(fix(?:es|ed)?|close[sd]?|resolve[sd]?|refs?|part of)\s*:?\s+((?:[\w.-]+\/[\w.-]+)?#\d+)/gi;
+// Issues a PR body names, each with `closes`: true for Fixes / Closes / Resolves, false for Refs / Part of.
+export const prRefs = (pr, repo) => [...(pr.body ?? '').matchAll(REF)].map((m) =>
+  ({ url: urlOf(m[2].startsWith('#') ? `${repo}${m[2]}` : m[2]), closes: !/^(refs?|part of)$/i.test(m[1]) }));
 
 export function sync(board, profile, { dry = false, closeMerged = false } = {}) {
   const changes = [], checks = [];
@@ -262,7 +265,9 @@ export function sync(board, profile, { dry = false, closeMerged = false } = {}) 
   }
 
   // 2. PR state per issue, read from PR bodies. Open PRs go on the board, In review.
-  const openPR = new Map(), mergedPR = new Map();
+  // openPR / mergedPR: every PR naming the issue (for the "Pull request" field).
+  // openFix / mergedFix: only PRs that close it (for Status and closing).
+  const openPR = new Map(), mergedPR = new Map(), openFix = new Map(), mergedFix = new Map();
   const push = (m, k, v) => m.set(k, [...(m.get(k) ?? []), v]);
   const base = profile.prBase ? ['--base', profile.prBase] : [];
   const hasPr = ensureTextField(board, 'Pull request', dry), hasFixes = ensureTextField(board, 'Fixes', dry);
@@ -281,9 +286,9 @@ export function sync(board, profile, { dry = false, closeMerged = false } = {}) 
   for (const repo of profile.repos) {
     const open = JSON.parse(gh(['pr', 'list', '-R', repo, '-s', 'open', '-L', '200', '--json', 'url,number,body,isDraft,reviewRequests,latestReviews,reviewDecision,headRefOid,baseRefName,headRefName']));
     for (const pr of prsOnBase(open, profile.prBase)) {
-      const refs = prRefs(pr, repo);
+      const named = prRefs(pr, repo), refs = named.map((r) => r.url);
       pr.ready = readyToMerge(repo, pr);
-      for (const u of refs) push(openPR, u, pr);
+      for (const r of named) { push(openPR, r.url, pr); if (r.closes) push(openFix, r.url, pr); }
       const it = board.items.get(pr.url), fixes = refs.map((u) => shortIn(u, repo)).join(' · ');
       const want = pr.ready ? 'Ready to merge' : 'In review';
       const sprint = it?.sprint ? undefined : sprintForPr(board, refs) ?? undefined;
@@ -297,7 +302,7 @@ export function sync(board, profile, { dry = false, closeMerged = false } = {}) 
         checks.push(`${short(pr.url)}: nobody asked to review it. Request a reviewer so someone picks it up.`);
     }
     for (const pr of JSON.parse(gh(['pr', 'list', '-R', repo, '-s', 'merged', '-L', '200', ...base, '--json', 'url,body,mergeCommit,baseRefName'])))
-      for (const u of prRefs(pr, repo)) push(mergedPR, u, pr);
+      for (const r of prRefs(pr, repo)) { push(mergedPR, r.url, pr); if (r.closes) push(mergedFix, r.url, pr); }
   }
 
   // 3. Each issue on the board.
@@ -310,7 +315,7 @@ export function sync(board, profile, { dry = false, closeMerged = false } = {}) 
     if (c?.__typename !== 'Issue') continue;
     if (c.parent?.url) children.set(c.parent.url, [...(children.get(c.parent.url) ?? []), it]);
     const s = it.status?.name ?? null, ref = short(c.url);
-    const open = openPR.get(c.url)?.[0], merged = mergedPR.get(c.url)?.[0];
+    const open = openFix.get(c.url)?.[0], merged = mergedFix.get(c.url)?.[0];
     let now = s;
     const repo = c.repository?.nameWithOwner ?? '';
     const prs = [...(openPR.get(c.url) ?? []).map((p) => `${shortIn(p.url, repo)} open`),
@@ -318,7 +323,7 @@ export function sync(board, profile, { dry = false, closeMerged = false } = {}) 
     if (links && (it.prText?.text ?? '') !== prs) act(`${ref}: Pull request "${prs}"`, () => set(c.url, { prText: prs }));
 
     // An issue is ready to merge only when every open PR that names it is.
-    const want = open && openPR.get(c.url).every((p) => p.ready) ? 'Ready to merge' : 'In review';
+    const want = open && openFix.get(c.url).every((p) => p.ready) ? 'Ready to merge' : 'In review';
     if (c.state === 'OPEN' && open && [null, 'Backlog', 'Ready', 'In progress', 'In review', 'Ready to merge'].includes(s) && s !== want) {
       act(`${ref}: ${s ?? 'no status'} → ${want} (${short(open.url)})`, () => set(c.url, { status: want }));
       now = want;

@@ -50,7 +50,7 @@ Every skill moves the board at the moment it acts, with `board.mjs` (from anothe
 | Release drafted | writing-release-notes | Release set on every shipped issue |
 | Standup, planning, sprint close | running-scrum | sync; assignees from the profile's Owners; Sprint and Status for planned issues; unfinished issues rolled over to the next sprint |
 
-`board.mjs sync` repairs what people changed by hand. It reads `Fixes` / `Closes` / `Refs #n` from PR bodies, because GitHub links those only on PRs into the default branch. It moves issues to In review or On test, returns reopened ones to Ready, adds missing issues, starts parents, and lists what needs a person (stale sprints, nobody assigned, closed without a PR). Run it with `--dry` first; `--close-merged` also closes issues whose PR merged into the profile's PR base. Run it on request, and at the start of planning-work and writing-release-notes.
+`board.mjs sync` repairs what people changed by hand. It reads `Fixes` / `Closes` / `Refs #n` from PR bodies, because GitHub links those only on PRs into the default branch. It moves issues to In review or On test only on `Fixes`, `Closes` or `Resolves`; `Refs` and `Part of` only fill the "Pull request" field. It returns reopened issues to Ready, adds missing issues, starts parents, and lists what needs a person (stale sprints, nobody assigned, closed without a PR). Run it with `--dry` first; `--close-merged` also closes issues whose PR merged into the profile's PR base. Run it on request, and at the start of planning-work and writing-release-notes.
 
 ## What it sets up
 
