@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { findItem, prsOnBase, readProfile, setItems, sprintForPr } from '../board.mjs';
+import { findItem, prsOnBase, readProfile, setItems, sprintForPr, sync } from '../board.mjs';
 
 test('PRs stacked on another PR count as PRs into the base; unrelated bases do not', () => {
   const prs = [
@@ -102,4 +102,44 @@ test('readProfile defaults thresholds and owners when the profile has none', () 
   const p = readProfile(join(dir, 'p.md'));
   assert.deepEqual(p.owners, {});
   assert.deepEqual(p.thresholds, { stuck: 3, stale: 30, abandoned: 30 });
+});
+
+// sync against a fake `gh` on PATH that knows one merged PR with the given body.
+function syncWithMergedPr(body) {
+  const dir = mkdtempSync(join(tmpdir(), 'fake-gh-'));
+  const merged = [{ url: 'https://github.com/o/r/pull/25', body, baseRefName: 'main', mergeCommit: { oid: 'abc1234' } }];
+  writeFileSync(join(dir, 'gh'), `#!/usr/bin/env node
+const a = process.argv.slice(2).join(' ');
+process.stdout.write(a.includes('-s merged') ? ${JSON.stringify(JSON.stringify(merged))} : '[]');
+`, { mode: 0o755 });
+  const issue = 'https://github.com/o/r/issues/7';
+  const text = { dataType: 'TEXT' };
+  const b = {
+    items: new Map([[issue, { id: 'I7', status: { name: 'Ready' }, content: {
+      __typename: 'Issue', url: issue, state: 'OPEN', repository: { nameWithOwner: 'o/r' }, assignees: { totalCount: 1 } } }]]),
+    field: (n) => (['Pull request', 'Fixes'].includes(n) ? text : undefined),
+    workflows: { nodes: [] },
+  };
+  const lines = [], { log } = console, path = process.env.PATH;
+  process.env.PATH = `${dir}:${path}`;
+  console.log = (l) => lines.push(l);
+  try { sync(b, { repos: ['o/r'] }, { dry: true }); } finally { console.log = log; process.env.PATH = path; }
+  return lines.join('\n');
+}
+
+test('sync: a merged PR that only says "Refs #7" links #7 but leaves its status and does not ask to close it', () => {
+  const out = syncWithMergedPr('Plan for the feature.\n\nRefs #7');
+  assert.match(out, /o\/r#7: Pull request "#25 merged"/);
+  assert.doesNotMatch(out, /On test/);
+  assert.doesNotMatch(out, /Close it/);
+});
+
+test('sync: a merged PR that says "Part of #7" leaves #7 status unchanged', () => {
+  assert.doesNotMatch(syncWithMergedPr('Part of #7'), /On test/);
+});
+
+test('sync: a merged PR that says "Fixes #7" moves #7 to On test and asks to close it', () => {
+  const out = syncWithMergedPr('Fixes #7');
+  assert.match(out, /o\/r#7: Ready → On test \(o\/r#25 merged\)/);
+  assert.match(out, /Close it by the profile's rule/);
 });
