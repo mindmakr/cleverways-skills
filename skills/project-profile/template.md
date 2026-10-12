@@ -29,6 +29,8 @@ Shared: <path to another repo's profile, or delete this line>
 | Guardrails / invariants | | |
 | Translation check | | |
 
+- Checks: <ci: CI runs on every PR, and reviewing-prs needs `gh pr checks` green / local: `<command>`, because CI runs only on pushes to <branches>, so the reviewer runs it on the PR head>
+
 ## Local run
 
 - Start, in order: <database, migrate, seed, backend, web>

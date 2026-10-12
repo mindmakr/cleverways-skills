@@ -11,7 +11,8 @@
 //
 // State: { pr, round, reviewedSha, issues: [n], verdict, blockedOn,
 //          findings: [{ id, fp, severity, status, summary, where, round }],
-//          questions: [{ id, text, status, answer }] }
+//          questions: [{ id, text, status, answer }],
+//          checks: { where: 'ci' | 'local', command, sha, result } }   (checks is optional)
 // Finding status: open | fixed | wontfix | invalid.  Question status: open | answered.
 
 import { execFileSync } from 'node:child_process';
@@ -47,6 +48,7 @@ function render(s) {
     '',
     `Round ${s.round} · reviewed \`${(s.reviewedSha ?? '').slice(0, 7)}\`${s.issues.length ? ` · covers ${s.issues.map((n) => `#${n}`).join(', ')}` : ''}${s.blockedOn ? ` · **waiting on ${s.blockedOn}**` : ''}`,
     `Open: ${open.length} finding(s), ${qs.length} question(s).`,
+    ...(s.checks ? [`Checks (${s.checks.where}): ${s.checks.command ? `\`${s.checks.command}\` ` : ''}on \`${(s.checks.sha ?? '').slice(0, 7)}\`: ${s.checks.result}`] : []),
     '',
     '| ID | Severity | Status | Finding | Where | Found |',
     '|---|---|---|---|---|---|',
