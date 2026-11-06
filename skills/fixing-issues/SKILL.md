@@ -16,17 +16,17 @@ Linked issues are one change. Fix all of them in the same session, in the order 
    - **Planned task:** check that every task in its "Depends on" is closed. If one is not, stop and name the blocking task.
    - **Issue:** read the issue, its comments and every linked issue.
 
-   For every input: list the repos and the order they are fixed in. The default order is the layer that owns the logic first, then its clients. Re-find each cited location by its symbol and quoted code, not by the line number, because the line may have moved. If the quoted code is gone, check `git log -S '<quoted code>'` to see whether someone already fixed it, and say so on the issue.
+   For every input: list the repos and the order they are fixed in. The default order is the layer that owns the logic first, then its clients. Re-find each cited location by its symbol and quoted code, not its line number, which may have moved. If the quoted code is gone, check `git log -S '<quoted code>'` to see whether someone already fixed it, and say so on the issue.
 
    Then claim the work: `gh issue edit <n> --add-assignee @me` and `board.mjs set <refs> --status "In progress" --sprint current` for every issue in the change (the setting-up-project-tracking skill's script). A parent still in Backlog or Ready moves to In progress too.
 2. **Branch.** In each repo, run `git branch --show-current` before the first write. Run it again in the same command as every commit and push. Create the branch the profile's git flow names.
    - If the branch is checked out in another worktree (someone else's session), leave that worktree alone. Add your own with `git worktree add --detach <dir> origin/<branch>`, and push with `git push origin HEAD:<branch>` after checking that the remote head has not moved.
    - Edit code with the file editor, not with shell one-liners: the shell expands backticks and `$` inside strings, and can run what it expands.
-3. **Red.** Write a test that reproduces the issue's figures. Run it and watch it fail.
+3. **Red.** Write a test that reproduces the issue's figures. Run only that test, with `node ${CLAUDE_SKILL_DIR}/../project-profile/scripts/checks.mjs --cmd '<test command> <file>' --dir <dir>`, and watch it fail. Rerun it the same way while you fix.
 4. **Fix at the cause.** Reuse the shared helper, or create one. Add no fallback values, compatibility shims or second copies of a rule.
-5. **Verify.** Run the profile's commands for every area you touched (typecheck, lint, tests, guardrails, translation check). Paste the real output. A failing command means the work is not done.
+5. **Verify.** Once, before the PR, run `checks.mjs` with no options, for every profile command. Do any SKIP row as its cell says. A FAIL line means the work is not done.
 6. **Check the UI.** For a visible change, run the testing-web-visually or testing-mobile-visually skill with `--only` set to the changed screens, covering each text direction and a phone-width screen.
-7. **PR.** Open one PR per repo, on the profile's base branch and stacking rule. The body starts with `Fixes <owner/repo>#<n>` for each issue it resolves (`Refs` for one it only advances), lists the linked PRs with their merge order, says what changed, and includes the test output. The board script links PR to issue by those words, since GitHub does not for PRs outside the default branch. Then `board.mjs set <refs> --status "In review"`, and request the profile's reviewers except the PR's author, whom GitHub refuses (`gh pr edit <pr> --add-reviewer <handle>`), so a person picks it up.
+7. **PR.** Open one PR per repo, on the profile's base branch and stacking rule. The body starts with `Fixes <owner/repo>#<n>` for each issue it resolves (`Refs` for one it only advances), lists the linked PRs with their merge order, says what changed, and includes the test output. The board script links PR to issue by those words. Then `board.mjs set <refs> --status "In review"`, and request the profile's reviewers except the PR's author, whom GitHub refuses (`gh pr edit <pr> --add-reviewer <handle>`).
    - **Addressing review:** push to the same PR instead. Reply to each fixed finding's inline comment with `Fixed in <sha>: <one line>`, or give the reason it is not being fixed. Findings without an inline comment get one PR comment that starts with `<!-- cleverways:fix-note -->` and lists `R<n>: Fixed in <sha>: <one line>`. Leave threads unresolved; the reviewer resolves them once the fix is verified.
 8. **Report.** Comment on each issue with the PR link, what changed, the test results and anything left open. Anything left open that is outside this issue's scope becomes an issue now, with the investigating-issues skill's Follow-ups rule, and the comment links it.
 9. **Hand to review.** Run the reviewing-prs skill on each PR. The new commit starts its next round. Merge only when the user asks. Issues close after merge (reviewing-prs and verifying-fixes do that).
@@ -35,7 +35,7 @@ Linked issues are one change. Fix all of them in the same session, in the order 
 
 Keep each PR body and issue comment to these parts:
 - **Changed:** up to five bullets, one line each, with `path`.
-- **Tests:** the command and its pass/fail line, verbatim.
+- **Tests:** the `checks.mjs` lines, verbatim.
 - **Linked:** the other PRs and their merge order.
 - **Open:** anything left undone, or "none".
 
