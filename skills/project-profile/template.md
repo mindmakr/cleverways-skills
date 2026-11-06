@@ -29,6 +29,7 @@ Shared: <path to another repo's profile, or delete this line>
 | Guardrails / invariants | | |
 | Translation check | | |
 
+- Skills run this table with the project-profile skill's `scripts/checks.mjs`: put one backticked command in each Command cell (leading `NAME=value` settings are fine) and each directory in backticks; a row in prose is skipped.
 - Checks: <ci: CI runs on every PR, and reviewing-prs needs `gh pr checks` green / local: `<command>`, because CI runs only on pushes to <branches>, so the reviewer runs it on the PR head>
 
 ## Local run

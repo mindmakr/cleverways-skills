@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { copyFileSync, linkSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
 import { findItem, prsOnBase, readProfile, setItems, sprintForPr, sync } from '../board.mjs';
 
 test('PRs stacked on another PR count as PRs into the base; unrelated bases do not', () => {
@@ -105,13 +105,28 @@ test('readProfile defaults thresholds and owners when the profile has none', () 
 });
 
 // sync against a fake `gh` on PATH that knows one merged PR with the given body.
+// board.mjs runs execFileSync('gh') with no shell. On POSIX the fake is an executable node-shebang
+// file. On Windows only a real gh.exe is found (not a shebang file, not gh.cmd), so the fake is a
+// copy of node.exe named gh.exe; NODE_OPTIONS preloads the fake script, which answers and exits
+// before node would look for a script named "pr".
 function syncWithMergedPr(body) {
   const dir = mkdtempSync(join(tmpdir(), 'fake-gh-'));
   const merged = [{ url: 'https://github.com/o/r/pull/25', body, baseRefName: 'main', mergeCommit: { oid: 'abc1234' } }];
-  writeFileSync(join(dir, 'gh'), `#!/usr/bin/env node
-const a = process.argv.slice(2).join(' ');
+  const fake = `const a = process.argv.slice(2).join(' ');
 process.stdout.write(a.includes('-s merged') ? ${JSON.stringify(JSON.stringify(merged))} : '[]');
-`, { mode: 0o755 });
+`;
+  const env = {};
+  if (process.platform === 'win32') {
+    const script = join(dir, 'fake-gh.cjs');
+    writeFileSync(script, `const a = process.argv.slice(2).join(' ');
+require('node:fs').writeSync(1, a.includes('-s merged') ? ${JSON.stringify(JSON.stringify(merged))} : '[]');
+process.exit(0);
+`);
+    try { linkSync(process.execPath, join(dir, 'gh.exe')); } catch { copyFileSync(process.execPath, join(dir, 'gh.exe')); }
+    env.NODE_OPTIONS = `--require "${script.replaceAll(String.fromCharCode(92), '/')}"`;
+  } else {
+    writeFileSync(join(dir, 'gh'), `#!/usr/bin/env node\n${fake}`, { mode: 0o755 });
+  }
   const issue = 'https://github.com/o/r/issues/7';
   const text = { dataType: 'TEXT' };
   const b = {
@@ -120,10 +135,16 @@ process.stdout.write(a.includes('-s merged') ? ${JSON.stringify(JSON.stringify(m
     field: (n) => (['Pull request', 'Fixes'].includes(n) ? text : undefined),
     workflows: { nodes: [] },
   };
-  const lines = [], { log } = console, path = process.env.PATH;
-  process.env.PATH = `${dir}:${path}`;
+  const lines = [], { log } = console, path = process.env.PATH, nodeOptions = process.env.NODE_OPTIONS;
+  process.env.PATH = `${dir}${delimiter}${path}`;
+  if (env.NODE_OPTIONS) process.env.NODE_OPTIONS = env.NODE_OPTIONS;
   console.log = (l) => lines.push(l);
-  try { sync(b, { repos: ['o/r'] }, { dry: true }); } finally { console.log = log; process.env.PATH = path; }
+  try { sync(b, { repos: ['o/r'] }, { dry: true }); } finally {
+    console.log = log;
+    process.env.PATH = path;
+    if (nodeOptions === undefined) delete process.env.NODE_OPTIONS; else process.env.NODE_OPTIONS = nodeOptions;
+    rmSync(dir, { recursive: true, force: true });
+  }
   return lines.join('\n');
 }
 

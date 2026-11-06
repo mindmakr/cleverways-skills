@@ -4,8 +4,9 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const script = new URL('../review-state.mjs', import.meta.url).pathname;
+const script = fileURLToPath(new URL('../review-state.mjs', import.meta.url));
 const render = (state) => {
   const file = join(mkdtempSync(join(tmpdir(), 'review-state-')), 'state.json');
   writeFileSync(file, JSON.stringify(state));
