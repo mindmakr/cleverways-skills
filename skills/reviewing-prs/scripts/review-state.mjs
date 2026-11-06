@@ -10,17 +10,23 @@
 //   node review-state.mjs put <pr> --file state.json [--repo owner/repo] [--dry [--stored old.json]]
 //                                creates or updates the comment (--dry prints it; --stored stands in for the comment)
 //   node review-state.mjs scope <pr> [--final] [--head sha] [--base ref] [--state state.json] [--repo owner/repo]
-//                                prints what the next round reviews, and the commands that set it up
+//                                prints what the next round reviews, and how
+//   --fixture <file> ({ comments, reviews } as the GitHub API returns them) stands in for GitHub in tests.
 //
-// Round cap: a PR gets four rounds. A question the user answers allowing more carries
-// `extraRounds: n` (1 to 4) and raises the cap by n. `scope` exits 5 when the next round is past
-// the cap and lists the open items; the verdict is then BLOCKED ON user. `put` refuses (exit 5) a
-// state whose round is not a whole number at least the stored one, is past the cap, or whose
-// extraRounds is out of range or was not granted by answering a question the tracker held open.
+// Round cap: a PR gets four rounds, and only the person can allow more. `scope` exits 5 when the
+// next round is past the cap and lists the open items; the verdict is then BLOCKED ON user. `put`
+// refuses (exit 5) a state whose round is not a whole number, is past the cap, or is below the
+// stored round. The stored round is never below the highest round review on the PR
+// ("<!-- cleverways:review-round:<n> -->"; GitHub keeps submitted reviews), so deleting the
+// tracker does not reset it. `extraRounds: n` (1 to 4) on an answered question raises the cap by
+// n only with `answerComment: <id>`: a PR comment written after the question was put on the
+// tracker (`askedAt`, stamped by this script), naming the question id and the number, and not
+// written by these skills (no "<!-- cleverways" marker). An agent cannot grant rounds by
+// answering its own question; it would have to post a comment as the person, in plain sight.
 //
 // State: { pr, round, reviewedSha, issues: [n], verdict, blockedOn,
 //          findings: [{ id, fp, severity, status, summary, where, round }],
-//          questions: [{ id, text, status, answer, extraRounds }],
+//          questions: [{ id, text, status, answer, askedAt, extraRounds, answerComment }],
 //          checks: { where: 'ci' | 'local', command, sha, result } }   (checks is optional)
 // Finding status: open | fixed | wontfix | invalid.  Question status: open | answered.
 
@@ -48,17 +54,24 @@ const capOf = (s) => CAP + (s.questions ?? [])
   .filter((q) => q.status === 'answered' && validExtra(q.extraRounds))
   .reduce((n, q) => n + q.extraRounds, 0);
 const refuse = (why) => { console.error(why); process.exit(5); };
-function refusePut(next, stored) {
+// The highest round review on the PR: a floor for the round that survives a deleted tracker.
+const reviewFloor = (reviews) => Math.max(0, ...reviews.map((x) => Number(x.body?.match(/<!-- cleverways:review-round:(\d+) -->/)?.[1]) || 0));
+function checkPut(next, stored, { comments, reviews }, now) {
   const prev = stored ?? { round: 0, questions: [] };
+  const floor = Math.max(prev.round ?? 0, reviewFloor(reviews));
   if (!Number.isInteger(next.round) || next.round < 1) refuse(`round must be a whole number of at least 1, not ${JSON.stringify(next.round)}.`);
-  if (next.round < prev.round) refuse(`Round ${next.round} is lower than the stored round ${prev.round}; a round number never goes back.`);
+  if (next.round < floor) refuse(`Round ${next.round} is lower than round ${floor}, already stored or reviewed on the PR; a round number never goes back.`);
   for (const q of next.questions ?? []) {
+    const before = (prev.questions ?? []).find((x) => x.id === q.id);
+    q.askedAt = before?.askedAt ?? now; // stamped here, never taken from the caller
     if (q.extraRounds === undefined || q.extraRounds === null) continue;
     if (!validExtra(q.extraRounds)) refuse(`${q.id}: extraRounds must be a whole number from 1 to ${MAX_EXTRA}, not ${JSON.stringify(q.extraRounds)}.`);
-    const before = (prev.questions ?? []).find((x) => x.id === q.id);
-    const kept = before && before.status === 'answered' && before.extraRounds === q.extraRounds;
-    const granted = before && before.status === 'open' && q.status === 'answered';
-    if (!kept && !granted) refuse(`${q.id}: extraRounds can only be set when the user answers a question the tracker already holds open.`);
+    if (before?.status === 'answered' && before.extraRounds === q.extraRounds && before.answerComment === q.answerComment) continue;
+    if (before?.status !== 'open' || q.status !== 'answered') refuse(`${q.id}: extraRounds can only be set when the person answers a question the tracker already holds open.`);
+    const c = comments.find((x) => String(x.id) === String(q.answerComment));
+    const ok = c && !c.body?.includes('<!-- cleverways') && Date.parse(c.created_at) > Date.parse(before.askedAt)
+      && new RegExp(`\\b${q.id}\\b`).test(c.body) && new RegExp(`\\b${q.extraRounds}\\b`).test(c.body);
+    if (!ok) refuse(`${q.id}: extraRounds needs answerComment, the id of the person's PR comment written after the question was asked, naming ${q.id} and ${q.extraRounds}. Ask the person to reply on the PR.`);
   }
   if (next.round > capOf(next)) refuseOverCap(next, next.round);
 }
@@ -85,12 +98,23 @@ const SECURITY = [
 ];
 const securityRelevant = (path) => SECURITY.some((re) => re.test(path));
 
+let factsCache;
+function facts() {
+  if (factsCache) return factsCache;
+  if (opt('fixture') || rest.includes('--dry')) {
+    return (factsCache = { comments: [], reviews: [], ...(opt('fixture') ? JSON.parse(readFileSync(opt('fixture'), 'utf8')) : {}) });
+  }
+  const list = (path) => JSON.parse(gh(['api', '--paginate', '--slurp', `repos/${repoOf()}/${path}`])).flat();
+  return (factsCache = { comments: list(`issues/${pr}/comments`), reviews: list(`pulls/${pr}/reviews`) });
+}
 function find() {
-  const comments = JSON.parse(gh(['api', '--paginate', '--slurp', `repos/${repoOf()}/issues/${pr}/comments`])).flat();
+  const { comments, reviews } = facts();
   const c = comments.find((x) => x.body?.includes(MARK));
-  if (!c) return { commentId: null, state: { pr: Number(pr), round: 0, reviewedSha: null, issues: [], verdict: null, blockedOn: null, findings: [], questions: [] } };
+  const floor = reviewFloor(reviews);
+  if (!c) return { commentId: null, state: { pr: Number(pr), round: floor, reviewedSha: null, issues: [], verdict: null, blockedOn: null, findings: [], questions: [] } };
   const json = c.body.match(/<!-- state\n([\s\S]*?)\n-->/)?.[1];
-  return { commentId: c.id, state: JSON.parse(json) };
+  const state = JSON.parse(json);
+  return { commentId: c.id, state: { ...state, round: Math.max(Number.isInteger(state.round) ? state.round : 0, floor) } };
 }
 
 function render(s) {
@@ -174,11 +198,13 @@ if (cmd === 'resolve') {
   //  - --final: the whole PR once more, run by a follow-up round about to say READY, so code
   //    no range showed again is still read at the end. No security: round 1 had it.
   // `prepare` makes a worktree at head (unique per head) that reviewers read by path, never by cd.
-  // Round 1 and the final pass name the PR as the code-review target. A range round hands the
-  // correctness review to a subagent with correctness-brief.md and `diff`, because a skill
-  // runs in the session's directory and cannot be pointed at a worktree.
+  // A skill runs in the session's directory and cannot be pointed at a worktree, so the code-review
+  // skill is named only for a whole-PR pass when the session's checkout is already at head. Every
+  // other review is one subagent with reviewer-brief.md, `dir` and `diff`.
+  const atHead = (sha) => { try { return git('rev-parse', 'HEAD').trim() === sha; } catch { return false; } };
   const state = opt('state') ? JSON.parse(readFileSync(opt('state'), 'utf8')) : find().state;
   if (!Number.isInteger(state.round) || state.round < 0) refuse(`The stored round is ${JSON.stringify(state.round)}, not a whole number.`);
+  if (opt('state') && opt('fixture')) state.round = Math.max(state.round, reviewFloor(facts().reviews));
   const round = state.round + 1;
   if (round > capOf(state)) refuseOverCap(state, round);
   const final = rest.includes('--final');
@@ -205,7 +231,7 @@ if (cmd === 'resolve') {
     dir,
     prepare: `git worktree add --detach "${dir}" ${head}`,
     diff: `git -C "${dir}" diff ${start}..${head}`,
-    correctness: mode === 'range' ? 'subagent: correctness-brief.md, dir, diff' : `code-review high ${pr}`,
+    correctness: mode !== 'range' && atHead(head) ? `code-review high ${pr}` : 'subagent: reviewer-brief.md, dir, diff',
     cleanup: `git worktree remove --force "${dir}"`,
   }, null, 2));
 } else if (cmd === 'get') {
@@ -213,12 +239,12 @@ if (cmd === 'resolve') {
 } else {
   const state = JSON.parse(readFileSync(opt('file') ?? '', 'utf8'));
   if (rest.includes('--dry')) {
-    refusePut(state, opt('stored') ? JSON.parse(readFileSync(opt('stored'), 'utf8')) : null);
+    checkPut(state, opt('stored') ? JSON.parse(readFileSync(opt('stored'), 'utf8')) : null, facts(), opt('now') ?? new Date().toISOString());
     console.log(render(state));
     process.exit(0);
   }
   const { commentId, state: stored } = find();
-  refusePut(state, stored);
+  checkPut(state, commentId ? stored : null, facts(), new Date().toISOString());
   const bodyFile = join(tmpdir(), `pr-review-${pr}.md`);
   writeFileSync(bodyFile, render(state));
   const res = commentId

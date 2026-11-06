@@ -49,13 +49,15 @@ const scope = (r, state, head, extra = []) => {
 };
 const fresh = { ...base, round: 0, reviewedSha: null, verdict: null };
 
-test('round 1 reviews the whole PR with the code-review skill on the PR, and security', () => {
+test('round 1 reviews the whole PR with security; the code-review skill only when the checkout is at head', () => {
   const r = repo();
-  const { out } = scope(r, fresh, r.r1);
+  const { out } = scope(r, fresh, r.route);
   assert.equal(out.mode, 'full');
   assert.equal(out.security, true);
-  assert.equal(out.range, `${r.mainSha}..${r.r1}`);
+  assert.equal(out.range, `${r.mainSha}..${r.route}`);
   assert.equal(out.correctness, 'code-review high 1');
+  // The session's checkout is not at this head: the skill would read the wrong code.
+  assert.match(scope(r, fresh, r.r1).out.correctness, /^subagent: reviewer-brief\.md/);
 });
 
 test('a follow-up round reviews only the new range, by subagent, without security when no relevant path changed', () => {
@@ -65,7 +67,7 @@ test('a follow-up round reviews only the new range, by subagent, without securit
   assert.equal(out.range, `${r.r1}..${r.plain}`);
   assert.equal(out.files, 1);
   assert.equal(out.security, false);
-  assert.match(out.correctness, /^subagent: correctness-brief\.md/);
+  assert.match(out.correctness, /^subagent: reviewer-brief.md/);
 });
 
 test('prepare and diff work from another directory and show exactly the range, at a per-head path', () => {
@@ -133,7 +135,9 @@ test('an answered question with extraRounds lets the user allow more rounds', ()
   assert.equal(scope(r, { ...base, round: 4, reviewedSha: r.r1, questions: open }, r.plain).status, 5);
 });
 
-const put = (next, stored) => run(['put', '1', '--repo', 'o/r', '--file', stateFile(next), '--dry', ...(stored ? ['--stored', stateFile(stored)] : [])]);
+const put = (next, stored, fixture, now) => run(['put', '1', '--repo', 'o/r', '--file', stateFile(next), '--dry',
+  ...(stored ? ['--stored', stateFile(stored)] : []), ...(fixture ? ['--fixture', stateFile(fixture)] : []), ...(now ? ['--now', now] : [])]);
+const roundReview = (n) => ({ id: 100 + n, body: `<!-- cleverways:review-round:${n} -->\n**NEEDS FIXES**` });
 
 test('put refuses a state past the cap', () => {
   assert.equal(put({ ...base, round: 5 }).status, 5);
@@ -144,30 +148,60 @@ test('put refuses a round lower than the stored one, or missing, or not a whole 
   const stored = { ...base, round: 4 };
   const res = put({ ...base, round: 2 }, stored);
   assert.equal(res.status, 5);
-  assert.match(res.stderr, /lower than the stored round 4/);
+  assert.match(res.stderr, /lower than round 4/);
   const { round, ...noRound } = base;
   for (const next of [noRound, { ...base, round: 'x' }, { ...base, round: 0 }, { ...base, round: 4.5 }]) assert.equal(put(next, stored).status, 5);
   assert.equal(put({ ...base, round: 4 }, stored).status, 0);
 });
 
-test('extraRounds is granted only by answering a question the tracker held open, from 1 to 4', () => {
-  const asked = { id: 'Q1', text: 'Allow more rounds?', status: 'open', answer: null };
-  const stored = { ...base, round: 4, questions: [asked] };
-  const grant = (extraRounds, from = stored) => put({ ...base, round: 4, questions: [{ ...asked, status: 'answered', answer: 'yes', extraRounds }] }, from);
-  assert.equal(grant(2).status, 0);
+test('deleting the tracker does not reset the round: the round reviews on the PR set a floor', () => {
+  const reviews = [roundReview(1), roundReview(2), roundReview(3), roundReview(4)];
+  // No tracker stored (deleted), the agent starts again at round 1: refused.
+  const res = put({ ...base, round: 1 }, null, { reviews });
+  assert.equal(res.status, 5);
+  assert.match(res.stderr, /lower than round 4/);
+  // scope with the same PR history refuses round 5 as past the cap.
+  const r = repo();
+  const s = run(['scope', '1', '--repo', 'o/r', '--state', stateFile({ ...base, round: 0, reviewedSha: null }), '--fixture', stateFile({ reviews }),
+    '--base', 'main', '--head', r.plain], r.dir);
+  assert.equal(s.status, 5);
+  assert.match(s.stderr, /Round 5 is past/);
+});
+
+test('extraRounds needs the person\'s own PR comment, written after the question was asked', () => {
+  const asked = { id: 'Q1', text: 'Allow more rounds?', status: 'open', answer: null, askedAt: '2026-11-06T10:00:00Z' };
+  const stored = { ...base, round: 4, verdict: 'BLOCKED ON user', blockedOn: 'user', questions: [asked] };
+  const reply = { id: 77, body: 'Q1: yes, allow 2 more rounds', created_at: '2026-11-06T11:00:00Z' };
+  const grant = (q, fixture = { comments: [reply] }, from = stored) => put({ ...base, round: 4, questions: [{ ...asked, status: 'answered', answer: 'yes', ...q }] }, from, fixture);
+
+  assert.equal(grant({ extraRounds: 2, answerComment: 77 }).status, 0);
+  // The agent answers its own question: no comment from the person.
+  let res = grant({ extraRounds: 2 });
+  assert.equal(res.status, 5);
+  assert.match(res.stderr, /needs answerComment/);
+  // A comment written before the question was asked, by these skills, or not naming the question or number.
+  for (const c of [{ ...reply, created_at: '2026-11-06T09:00:00Z' }, { ...reply, body: `<!-- cleverways:fix-note -->\n${reply.body}` },
+    { ...reply, body: 'yes, more rounds' }, { ...reply, body: 'Q1: allow 3 more' }]) {
+    assert.equal(grant({ extraRounds: 2, answerComment: 77 }, { comments: [c] }).status, 5, c.body);
+  }
+  // Self-open then self-answer in one put: the question was not stored open.
+  res = grant({ extraRounds: 2, answerComment: 77 }, { comments: [reply] }, { ...stored, questions: [] });
+  assert.equal(res.status, 5);
+  assert.match(res.stderr, /already holds open/);
+  // Self-open in one put (askedAt is stamped by the script, not the caller), then answer with an older comment.
+  const opened = put({ ...base, round: 4, questions: [{ id: 'Q2', text: 'More?', status: 'open', askedAt: '2000-01-01T00:00:00Z' }] }, { ...base, round: 4 }, null, '2026-11-06T12:00:00Z');
+  assert.equal(opened.status, 0);
+  assert.match(opened.stdout, /"askedAt":"2026-11-06T12:00:00Z"/);
+  // Out-of-range values are refused even with a comment.
   for (const bad of [-2, 0, 1.5, '3', 5, 1000]) {
-    const res = grant(bad);
+    res = grant({ extraRounds: bad, answerComment: 77 });
     assert.equal(res.status, 5, `extraRounds ${JSON.stringify(bad)} accepted`);
     assert.match(res.stderr, /from 1 to 4/);
   }
-  // A question added already answered, with no open question stored, grants nothing.
-  const res = grant(2, { ...base, round: 4, questions: [] });
-  assert.equal(res.status, 5);
-  assert.match(res.stderr, /already holds open/);
-  // Once granted, the same value is kept; raising it later is refused.
-  const granted = { ...base, round: 5, questions: [{ ...asked, status: 'answered', answer: 'yes', extraRounds: 2 }] };
-  assert.equal(put(granted, granted).status, 0);
-  assert.equal(put({ ...granted, questions: [{ ...granted.questions[0], extraRounds: 4 }] }, granted).status, 5);
+  // Once granted it is kept; raising it later is refused.
+  const granted = { ...stored, round: 5, questions: [{ ...asked, status: 'answered', answer: 'yes', extraRounds: 2, answerComment: 77 }] };
+  assert.equal(put(granted, granted, { comments: [reply] }).status, 0);
+  assert.equal(put({ ...granted, questions: [{ ...granted.questions[0], extraRounds: 4 }] }, granted, { comments: [reply] }).status, 5);
   // scope ignores an out-of-range value.
   const r = repo();
   const q = [{ ...asked, status: 'answered', extraRounds: -3 }];
