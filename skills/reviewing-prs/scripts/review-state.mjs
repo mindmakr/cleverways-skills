@@ -193,7 +193,8 @@ if (cmd === 'resolve') {
 } else if (cmd === 'scope') {
   // What the next round reviews, and how. Every review runs at high effort.
   //  - round 1: the whole PR, with the security scan and security review;
-  //  - later rounds: only reviewedSha..head; security again only when that range touches a
+  //  - later rounds: the whole PR again while it changes fewer than RANGE_FROM_LINES lines, else
+  //    only reviewedSha..head; security again only when the new commits touch a
   //    security-relevant path (a rebase that drops reviewedSha means the whole PR again);
   //  - --final: the whole PR once more, run by a follow-up round about to say READY, so code
   //    no range showed again is still read at the end. No security: round 1 had it.
@@ -201,6 +202,8 @@ if (cmd === 'resolve') {
   // A skill runs in the session's directory and cannot be pointed at a worktree, so the code-review
   // skill is named only for a whole-PR pass when the session's checkout is already at head. Every
   // other review is one subagent with reviewer-brief.md, `dir` and `diff`.
+  const RANGE_FROM_LINES = 3000; // whole-PR size (lines added + deleted) from which follow-up rounds review ranges
+  const changedLines = (a, b) => git('diff', '--shortstat', a, b).match(/\d+(?= (insertion|deletion))/g)?.reduce((n, x) => n + Number(x), 0) ?? 0;
   const atHead = (sha) => { try { return git('rev-parse', 'HEAD').trim() === sha; } catch { return false; } };
   const state = opt('state') ? JSON.parse(readFileSync(opt('state'), 'utf8')) : find().state;
   if (!Number.isInteger(state.round) || state.round < 0) refuse(`The stored round is ${JSON.stringify(state.round)}, not a whole number.`);
@@ -219,13 +222,20 @@ if (cmd === 'resolve') {
   if (from === head && !final) { console.log(JSON.stringify({ round: state.round, head, same: true })); process.exit(0); }
   let ancestor = false;
   if (from && !final) { try { git('merge-base', '--is-ancestor', from, head); ancestor = true; } catch { /* rebased */ } }
-  const start = ancestor ? from : git('merge-base', base, head).trim();
+  const mergeBase = git('merge-base', base, head).trim();
+  // A small PR is cheaper to review whole than to review in ranges, and the whole read catches
+  // what a range misses; ranges pay off only on a large PR.
+  const prLines = changedLines(mergeBase, head);
+  const useRange = ancestor && prLines >= RANGE_FROM_LINES;
+  const start = useRange ? from : mergeBase;
   const files = git('diff', '--name-only', '--no-renames', start, head).split('\n').filter(Boolean);
-  const securityFiles = files.filter(securityRelevant);
+  // Security runs again only when the new commits touch a security-relevant path.
+  const newFiles = ancestor ? git('diff', '--name-only', '--no-renames', from, head).split('\n').filter(Boolean) : files;
+  const securityFiles = newFiles.filter(securityRelevant);
   const dir = (opt('dir') ?? join(tmpdir(), `review-${pr}-${head.slice(0, 7)}`)).replace(/\\/g, '/');
-  const mode = final ? 'final' : ancestor ? 'range' : 'full';
+  const mode = final ? 'final' : useRange ? 'range' : 'full';
   console.log(JSON.stringify({
-    round, cap: capOf(state), mode, range: `${start}..${head}`, head, files: files.length,
+    round, cap: capOf(state), mode, prLines, rangeFromLines: RANGE_FROM_LINES, range: `${start}..${head}`, head, files: files.length,
     security: !final && (!from || securityFiles.length > 0),
     securityFiles,
     dir,

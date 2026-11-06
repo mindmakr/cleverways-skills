@@ -25,8 +25,9 @@ test('the tracker shows no checks line when the state has none', () => {
   assert.doesNotMatch(render(base), /Checks/);
 });
 
-// A throwaway repo: main has one file, the PR branch adds a plain file, then a fix touches a route.
-function repo() {
+// A throwaway repo: main has one file, the PR branch adds a plain file (with `lines` lines in all,
+// so a large PR by default), then a plain fix, then a fix that touches a route.
+function repo(lines = 3000) {
   const dir = mkdtempSync(join(tmpdir(), 'review-scope-'));
   const g = (...a) => execFileSync('git', a, { cwd: dir, encoding: 'utf8' }).trim();
   const put = (path, text) => { mkdirSync(dirname(join(dir, path)), { recursive: true }); writeFileSync(join(dir, path), text); };
@@ -35,7 +36,9 @@ function repo() {
   put('README.md', 'x\n'); g('add', '.'); g('commit', '-qm', 'base');
   const mainSha = g('rev-parse', 'HEAD');
   g('checkout', '-qb', 'pr');
-  put('src/services/report.ts', 'a\n'); g('add', '.'); g('commit', '-qm', 'r1');
+  put('src/services/report.ts', 'a\n');
+  if (lines > 1) put('src/services/big.ts', 'x\n'.repeat(lines - 1));
+  g('add', '.'); g('commit', '-qm', 'r1');
   const r1 = g('rev-parse', 'HEAD');
   put('src/services/report.ts', 'b\n'); g('add', '.'); g('commit', '-qm', 'plain fix');
   const plain = g('rev-parse', 'HEAD');
@@ -206,4 +209,21 @@ test('extraRounds needs the person\'s own PR comment, written after the question
   const r = repo();
   const q = [{ ...asked, status: 'answered', extraRounds: -3 }];
   assert.equal(scope(r, { ...base, round: 1, reviewedSha: r.r1, questions: q }, r.plain).out.cap, 4);
+});
+
+test('follow-up rounds review the whole PR again below 3,000 changed lines, and only the range from there', () => {
+  const large = repo(3000);
+  let out = scope(large, { ...base, round: 1, reviewedSha: large.r1 }, large.plain).out;
+  assert.equal(out.prLines, 3000);
+  assert.equal(out.mode, 'range');
+  assert.equal(out.range, `${large.r1}..${large.plain}`);
+  const small = repo(2999);
+  out = scope(small, { ...base, round: 1, reviewedSha: small.r1 }, small.plain).out;
+  assert.equal(out.prLines, 2999);
+  assert.equal(out.mode, 'full');
+  assert.equal(out.range, `${small.mainSha}..${small.plain}`);
+  assert.match(out.correctness, /^subagent: reviewer-brief\.md/); // checkout is not at this head
+  // Security still follows only the new commits, not the whole PR.
+  assert.equal(out.security, false);
+  assert.equal(scope(small, { ...base, round: 1, reviewedSha: small.plain }, small.route).out.security, true);
 });
