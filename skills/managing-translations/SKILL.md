@@ -7,39 +7,47 @@ description: Use when adding or editing user-facing strings, when a screen shows
 
 Every locale has every key, the same placeholders, and a real translation.
 
-**Required:** the project-profile skill (locale folders, base locale, format, what to register for a new locale, copy under approval) and the writing-plainly skill.
+**Required:** the project-profile skill (locale folders, base locale, format, what a new locale needs registered, copy under approval) and the writing-plainly skill.
 
 ## Check parity
 
-Run this for every locale folder in every repo the profile lists:
+For every locale folder the profile lists:
 
 ```
 node ${CLAUDE_SKILL_DIR}/scripts/i18n-parity.mjs <dir> [<dir> ...] --base <base>
 ```
 
-Outside Claude Code, `${CLAUDE_SKILL_DIR}` is this skill's folder (for example `~/.agents/skills/managing-translations`).
+Outside Claude Code, `${CLAUDE_SKILL_DIR}` is this skill's folder.
 
-- The script exits 1 on `missing`, `extra` or `empty` keys.
-- It warns on `placeholder`, which means the variable names differ from the base, and on `sameAsBase`, which is probably untranslated.
-- Add `--json` for the full lists.
+It exits 1 on `missing`, `extra`, `empty` or `syntax` keys, and warns on `placeholder` (names differ from the base) and `sameAsBase` (probably untranslated). `--json` lists them all.
+
+## Translate in bulk
+
+For many keys, per locale:
+
+1. Put its `missing` and `sameAsBase` keys in one file:
+   `node ${CLAUDE_SKILL_DIR}/scripts/i18n-batch.mjs extract <dir> [<dir> ...] --locale <code> --base <base> --out <code>.batch.json`
+2. Fill each `<code>` value by the file's `rules`: yourself, or one agent per locale given only that file. Never one agent per file.
+3. `node ${CLAUDE_SKILL_DIR}/scripts/i18n-batch.mjs merge --in <code>.batch.json`. It writes nothing if a value is empty or its placeholders differ from the base; fix them and rerun.
+4. Check parity.
 
 ## Fix
 
-1. **Missing keys.** Add the key to every locale in the same change. Translate the meaning, not word for word. Keep placeholder names and plural branches identical to the base.
-2. **Extra keys.** Search the code for the key. Delete it if nothing uses it; otherwise add it to the base.
+1. **Missing keys.** Add the key to every locale in the same change, with the base's placeholders and plural branches.
+2. **Extra keys.** Delete the key if no code uses it; otherwise add it to the base.
 3. **`sameAsBase`.** Translate it, unless it is a brand name, a code, a unit or a number.
-4. **A file you edit.** Search the whole file for visible text that is not behind a key, and move it to keys.
-5. **Text shared by several clients.** Keep the key where the profile says it lives. Do not copy it into each client.
+4. **A file you edit.** Move visible text not behind a key to keys.
+5. **Shared text.** Keep the key where the profile says it lives.
 6. **Right-to-left locales.** Check changed screens in the running UI.
-7. **Copy under approval.** Copy the profile marks as under approval (for example email or SMS) changes only with its owner.
+7. **Copy under approval** (the profile marks it, for example SMS) changes only with its owner.
 
 ## Add a language
 
-1. Ask the user for the locale code, the direction (LTR or RTL) and who reviews the translations.
-2. Create `<code>.json` in every locale folder, starting from the base, then translate it.
-3. Register the language everywhere the profile's "to add a locale" line lists.
-4. Run the parity check until `missing` is 0. Review the `sameAsBase` list with the reviewer.
+1. Ask the user for the code, direction (LTR or RTL) and reviewer.
+2. Translate in bulk with the new code; merge creates the file.
+3. Register it where the profile's "to add a locale" line says.
+4. Review the `sameAsBase` list with the reviewer.
 
 ## Report
 
-Give one table per repo: a row for each locale, with columns for missing, extra, empty, placeholder and sameAsBase counts, then what you fixed.
+One table per repo, a row per locale with its parity counts, then what you fixed.
