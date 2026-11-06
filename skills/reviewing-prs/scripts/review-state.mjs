@@ -8,10 +8,16 @@
 //   node review-state.mjs issues <pr> [--repo owner/repo]              prints linked issue numbers
 //   node review-state.mjs resolve <pr> [--repo owner/repo]             resolves inline threads of fixed findings
 //   node review-state.mjs put <pr> --file state.json [--repo owner/repo] [--dry]  creates or updates the comment (--dry prints it)
+//   node review-state.mjs scope <pr> [--final] [--head sha] [--base ref] [--state state.json] [--repo owner/repo]
+//                                                                      prints what the next round reviews, and how
+//
+// Round cap: a PR gets four rounds. Each answered question with `extraRounds: n` (the user allowed
+// n more) raises it by n. `scope` exits 5 when the next round is past the cap and lists the open
+// items; `put` refuses a state whose round is past the cap. Either way the verdict is BLOCKED ON user.
 //
 // State: { pr, round, reviewedSha, issues: [n], verdict, blockedOn,
 //          findings: [{ id, fp, severity, status, summary, where, round }],
-//          questions: [{ id, text, status, answer }],
+//          questions: [{ id, text, status, answer, extraRounds }],
 //          checks: { where: 'ci' | 'local', command, sha, result } }   (checks is optional)
 // Finding status: open | fixed | wontfix | invalid.  Question status: open | answered.
 
@@ -23,15 +29,43 @@ import { join } from 'node:path';
 const MARK = '<!-- cleverways:pr-review -->';
 const [cmd, pr, ...rest] = process.argv.slice(2);
 const opt = (name) => { const i = rest.indexOf(`--${name}`); return i === -1 ? null : rest[i + 1]; };
-if (!['get', 'put', 'issues', 'resolve'].includes(cmd) || !pr) {
-  console.error('Usage: review-state.mjs get|put <pr> [--file state.json] [--repo owner/repo]');
+if (!['get', 'put', 'issues', 'resolve', 'scope'].includes(cmd) || !pr) {
+  console.error('Usage: review-state.mjs get|put|issues|resolve|scope <pr> [--file state.json] [--repo owner/repo]');
   process.exit(2);
 }
 const gh = (args) => execFileSync('gh', args, { encoding: 'utf8', maxBuffer: 1 << 26 });
-const repo = opt('repo') ?? gh(['repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner']).trim();
+const git = (...a) => execFileSync('git', a, { encoding: 'utf8', maxBuffer: 1 << 28, stdio: ['ignore', 'pipe', 'ignore'] });
+let repoName = opt('repo');
+const repoOf = () => (repoName ??= gh(['repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner']).trim());
+
+const CAP = 4;
+const capOf = (s) => CAP + (s.questions ?? [])
+  .filter((q) => q.status === 'answered').reduce((n, q) => n + (Number(q.extraRounds) || 0), 0);
+function refuseOverCap(s, round) {
+  console.error(`Round ${round} is past this PR's cap of ${capOf(s)} rounds. Set the verdict to BLOCKED ON user, `
+    + 'list the open items, and ask whether to allow more rounds (record the answer with extraRounds). Open items:');
+  for (const f of s.findings.filter((x) => x.status === 'open')) console.error(`- ${f.id} (${f.severity}) ${f.summary}`);
+  for (const q of (s.questions ?? []).filter((x) => x.status === 'open')) console.error(`- ${q.id} (question) ${q.text}`);
+  process.exit(5);
+}
+
+// Paths whose change makes a follow-up round run the security scan and security review again.
+// Generic on purpose: auth, sessions, permissions and roles, routes, queries, env and config,
+// secrets, CI workflows, container files, dependency manifests and lockfiles.
+const SEP = '(^|[/._-])', END = '([/._-]|$)';
+const SECURITY = [
+  new RegExp(`${SEP}(auth\\w*|login|logout|sign-?in|sign-?up|sessions?|tokens?|jwt|oauth|sso|otp|mfa|passwords?|credentials?|crypto|secrets?|keys?)${END}`, 'i'),
+  new RegExp(`${SEP}(permissions?|roles?|rbac|acl|polic(y|ies)|guards?|middlewares?|access)${END}`, 'i'),
+  new RegExp(`${SEP}(routes?|router|controllers?|handlers?|endpoints?|api|webhooks?|uploads?)${END}`, 'i'),
+  new RegExp(`${SEP}(sql|quer(y|ies)|repositor(y|ies)|migrations?)${END}|\\.sql$`, 'i'),
+  new RegExp(`(^|/)\\.env|${SEP}(env|config|settings)${END}`, 'i'),
+  /^\.github\/workflows\/|(^|\/)(Dockerfile|docker-compose[^/]*|compose\.ya?ml)$/i,
+  /(^|\/)(package(-lock)?\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lockb?|requirements[^/]*\.txt|pyproject\.toml|poetry\.lock|Pipfile(\.lock)?|go\.(mod|sum)|Cargo\.(toml|lock)|Gemfile(\.lock)?|composer\.(json|lock)|pom\.xml|build\.gradle(\.kts)?)$/i,
+];
+const securityRelevant = (path) => SECURITY.some((re) => re.test(path));
 
 function find() {
-  const comments = JSON.parse(gh(['api', '--paginate', '--slurp', `repos/${repo}/issues/${pr}/comments`])).flat();
+  const comments = JSON.parse(gh(['api', '--paginate', '--slurp', `repos/${repoOf()}/issues/${pr}/comments`])).flat();
   const c = comments.find((x) => x.body?.includes(MARK));
   if (!c) return { commentId: null, state: { pr: Number(pr), round: 0, reviewedSha: null, issues: [], verdict: null, blockedOn: null, findings: [], questions: [] } };
   const json = c.body.match(/<!-- state\n([\s\S]*?)\n-->/)?.[1];
@@ -69,7 +103,7 @@ if (cmd === 'resolve') {
   //  - keeps the latest round review visible (the verdict at the bottom of the PR);
   //  - once no finding is open, hides earlier round reviews and every fix note
   //    ("<!-- cleverways:fix-note -->") as RESOLVED. The tracker comment is never hidden.
-  const [owner, name] = repo.split('/');
+  const [owner, name] = repoOf().split('/');
   const q = 'query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){'
     + 'reviewThreads(first:100){nodes{id isResolved comments(first:1){nodes{body}}}} '
     + 'reviews(first:100){nodes{id isMinimized body}} comments(first:100){nodes{id isMinimized body}}}}}';
@@ -104,23 +138,57 @@ if (cmd === 'resolve') {
 } else if (cmd === 'issues') {
   // Linked issues: GitHub's closing references (GraphQL; not every gh version exposes them
   // in `gh pr view --json`) plus any #n written in the PR body.
-  const [owner, name] = repo.split('/');
+  const [owner, name] = repoOf().split('/');
   const q = 'query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){body closingIssuesReferences(first:50){nodes{number}}}}}';
   const data = JSON.parse(gh(['api', 'graphql', '-f', `query=${q}`, '-F', `o=${owner}`, '-F', `r=${name}`, '-F', `n=${pr}`]));
   const p = data.data.repository.pullRequest;
   const nums = new Set(p.closingIssuesReferences.nodes.map((x) => x.number));
   for (const m of (p.body ?? '').matchAll(/(?:^|[\s(])#(\d+)\b/g)) if (Number(m[1]) !== Number(pr)) nums.add(Number(m[1]));
   console.log(JSON.stringify([...nums].sort((a, b) => a - b)));
+} else if (cmd === 'scope') {
+  // What the next round reviews, and how:
+  //  - round 1: the whole PR at high effort, with the security scan and security review;
+  //  - later rounds: only reviewedSha..head at medium; security again only when that range
+  //    touches a security-relevant path (a rebase that drops reviewedSha means the whole PR);
+  //  - --final: the whole PR once more at medium, run by a follow-up round about to say READY,
+  //    so code no range showed again is still read at the end. No security: round 1 had it.
+  const state = opt('state') ? JSON.parse(readFileSync(opt('state'), 'utf8')) : find().state;
+  const round = state.round + 1;
+  if (round > capOf(state)) refuseOverCap(state, round);
+  const final = rest.includes('--final');
+  let head = opt('head'), base = opt('base');
+  if (!head || !base) {
+    const info = JSON.parse(gh(['pr', 'view', pr, '--repo', repoOf(), '--json', 'headRefOid,baseRefName']));
+    git('fetch', '-q', 'origin', info.baseRefName, `pull/${pr}/head`);
+    head ??= info.headRefOid;
+    base ??= `origin/${info.baseRefName}`;
+  }
+  const from = state.reviewedSha;
+  if (from === head && !final) { console.log(JSON.stringify({ round: state.round, head, same: true })); process.exit(0); }
+  let ancestor = false;
+  if (from && !final) { try { git('merge-base', '--is-ancestor', from, head); ancestor = true; } catch { /* rebased */ } }
+  const start = ancestor ? from : git('merge-base', base, head).trim();
+  const files = git('diff', '--name-only', '--no-renames', start, head).split('\n').filter(Boolean);
+  const securityFiles = files.filter(securityRelevant);
+  const mode = final ? 'final' : ancestor ? 'range' : 'full';
+  const effort = mode === 'full' && !from ? 'high' : 'medium';
+  console.log(JSON.stringify({
+    round, cap: capOf(state), mode, range: `${start}..${head}`, head, effort, files: files.length,
+    security: !final && (!from || securityFiles.length > 0),
+    securityFiles,
+    codeReview: mode === 'range' ? `code-review medium ${start}..${head}` : `code-review ${effort} ${pr}`,
+  }, null, 2));
 } else if (cmd === 'get') {
   console.log(JSON.stringify(find(), null, 2));
 } else {
   const state = JSON.parse(readFileSync(opt('file') ?? '', 'utf8'));
+  if (state.round > capOf(state)) refuseOverCap(state, state.round);
   if (rest.includes('--dry')) { console.log(render(state)); process.exit(0); }
   const { commentId } = find();
   const bodyFile = join(tmpdir(), `pr-review-${pr}.md`);
   writeFileSync(bodyFile, render(state));
   const res = commentId
-    ? gh(['api', '-X', 'PATCH', `repos/${repo}/issues/comments/${commentId}`, '-F', `body=@${bodyFile}`, '-q', '.html_url'])
-    : gh(['api', '-X', 'POST', `repos/${repo}/issues/${pr}/comments`, '-F', `body=@${bodyFile}`, '-q', '.html_url']);
+    ? gh(['api', '-X', 'PATCH', `repos/${repoOf()}/issues/comments/${commentId}`, '-F', `body=@${bodyFile}`, '-q', '.html_url'])
+    : gh(['api', '-X', 'POST', `repos/${repoOf()}/issues/${pr}/comments`, '-F', `body=@${bodyFile}`, '-q', '.html_url']);
   console.log(res.trim());
 }

@@ -12,20 +12,18 @@ The goal is a merge verdict backed by evidence: the PR fully covers its linked i
 ## One round
 
 1. **Load.** Run `review-state.mjs get <pr>` and `review-state.mjs issues <pr>`. Also run `gh pr view <pr> --json state,mergeCommit,headRefOid,body,files,baseRefName`.
-   - **Merged:** set the verdict to `MERGED`, close the linked issues by the profile's rule (a comment naming the PR and merge commit), run `board.mjs set <issue refs> --status "On test"` and `board.mjs set <pr url> --status Done` (the setting-up-project-tracking skill's script), update the tracker, and stop.
-   - **Closed without merging:** set the verdict to `CLOSED`, move the PR to Done and its issues back to Ready on the board, update the tracker, and stop.
+   - **Merged:** set the verdict to `MERGED`, close the linked issues by the profile's rule (naming the PR and merge commit), run `board.mjs set <issue refs> --status "On test"` and `board.mjs set <pr url> --status Done` (the setting-up-project-tracking skill's script), update the tracker, and stop.
+   - **Closed without merging:** set the verdict to `CLOSED`, move the PR to Done and its issues to Ready, update the tracker, and stop.
    - **Replies:** read the replies to your inline comments (`gh api repos/<repo>/pulls/<pr>/comments`). "Fixed in <sha>" is checked in step 4. A disagreement becomes a question for the user in step 5.
-   - **Other reviewers:** read every review and inline comment by others (people, Copilot, security bots) and every failing check. Each claim is a candidate for step 4, verified like your own and credited to its author. Never repeat one as a finding without checking it.
-   - If `headRefOid` equals the state's `reviewedSha`, nothing new has been pushed. Report the current state and stop. Re-reviewing the same commit is the loop to avoid.
-2. **Scope.** The linked issues are those `issues` printed; their acceptance checklists are the coverage goal. Take linked PRs in other repos from the issues.
-   - When the PR links no issue, the PR description is the goal: turn its claims into checklist items. In the first round, ask once whether that is the full scope.
-   - The range is `reviewedSha..head` when `reviewedSha` is an ancestor of head (`git merge-base --is-ancestor`), otherwise the whole PR.
-3. **Review, in parallel where the agent can:**
-   - **Correctness.** In Claude Code, run the `code-review` skill on the PR at level `high`. Elsewhere, read the diff for defects.
-   - **Security.** Run `node ${CLAUDE_SKILL_DIR}/scripts/security-scan.mjs --pr <pr>` from the repo. With Docker it runs gitleaks, Semgrep and osv-scanner on what the PR adds only (the header lists the rules), in under a minute, whether or not CI can run. It also checks changed GitHub Actions workflows with `workflow-limits.mjs`: every job time-limited, a new push cancels the old run, no macOS or Windows on every push. A broken build without these can use a month of CI minutes in a day. Exit 3 (no Docker) or 4 (a scan failed) goes under "not reviewed". Also run the `security-review` skill in Claude Code, or elsewhere read the diff for injection, missing authorisation or tenant scoping, and unsafe input handling. Each result is a candidate for step 4; a confirmed security finding is at least high.
-   - **Project reviewer.** Give a subagent `reviewer-brief.md` from this skill's folder, plus the PR, the range, the issues and the open findings. It returns coverage, earlier-finding status, candidate findings and questions, as JSON.
+   - **Other reviewers:** read every review and inline comment by others and every failing check. Each claim is a candidate for step 4, verified like your own and credited to its author.
+2. **Scope.** Run `review-state.mjs scope <pr>`. It prints the round's `range` (the whole PR in round 1 or after a rebase, else `reviewedSha..head`), `effort`, `security` and `codeReview`. `same: true` means nothing new was pushed: report the current state and stop. Exit 5 is the round cap (Loop control).
+   - The acceptance checklists of the issues `issues` printed are the coverage goal. Linked PRs in other repos come from the issues. When the PR links no issue, the PR description is the goal: turn its claims into checklist items. In round 1, ask once whether that is the full scope.
+3. **Review the range, in parallel where the agent can.** Every reviewer gets the range, not the whole PR; it may open any file but reports only defects in the range or caused by it.
+   - **Correctness.** In Claude Code, check out `head` and run the `code-review` skill exactly as `codeReview` says. In a later round that is `code-review medium <from>..<head>`: the explicit range makes it review that range, not the branch's upstream diff. Elsewhere, read that diff for defects.
+   - **Security, only when `security` is true:** round 1, or the range touches a security-relevant path (`securityFiles`). Run `node ${CLAUDE_SKILL_DIR}/scripts/security-scan.mjs --pr <pr>` from the repo. With Docker it runs gitleaks, Semgrep and osv-scanner on what the PR adds, and `workflow-limits.mjs` on changed CI workflows (the header lists the rules). Exit 3 (no Docker) or 4 (a scan failed) goes under "not reviewed". Also run the `security-review` skill on the range in Claude Code, or elsewhere read it for injection, missing authorisation or tenant scoping, and unsafe input handling. A confirmed security finding is at least high.
+   - **Project reviewer.** Give a subagent `reviewer-brief.md` from this skill's folder, plus the PR, the range, the issues and the open findings. It returns JSON.
 4. **Verify.** Keep a candidate only when you can open its file and see the quoted line at head, and the reason holds. A candidate that depends on intent becomes a question. Drop duplicates by fingerprint: `path:symbol:problem`.
-5. **Ask.** Ask the user the round's open questions together, at most four, each with options and your recommendation (AskUserQuestion in Claude Code). Record each answer in the state. A question once answered is never asked again. If the user is not available, mark the question open and set `blockedOn` to the user.
+5. **Ask.** Ask the user the round's open questions together, at most four, each with options and your recommendation (AskUserQuestion in Claude Code). Record each answer in the state; never ask it again. If the user is not available, mark the question open and set `blockedOn` to the user.
 6. **Update the state.**
    - New findings get the next `R<n>` id, `status: open` and this round's number.
    - Earlier findings move to `fixed` only with evidence.
@@ -34,25 +32,27 @@ The goal is a merge verdict backed by evidence: the PR fully covers its linked i
    - Set `round + 1` and `reviewedSha = head`.
 7. **Post.**
    - Run `review-state.mjs put <pr> --file <state.json>` to update the tracking comment.
-   - Post one review with `gh api repos/<repo>/pulls/<pr>/reviews --input review.json`, with `commit_id` set to head and `event: COMMENT`. It puts an inline comment in `comments[]` (path, line, `side: RIGHT`) for each new finding on a line the diff changes, and every other finding in the review body. GitHub rejects inline comments outside the diff. Each finding gives its ID, severity, problem, fix and pinned citation.
-   - Post a review every round, even when there is no new finding. It is the newest item on the PR, so readers see the current verdict. Its body starts with `<!-- cleverways:review-round:<n> -->`, then the verdict line and a link to the tracker.
-   - Run `review-state.mjs resolve <pr>`. It resolves the inline thread of each finding now `fixed`, hides earlier round reviews as outdated, and once nothing is open, hides earlier round reviews and fix notes as resolved. The latest round review and the tracker stay visible. The conversation then shows only what is still open, plus the tracker.
+   - Post one review with `gh api repos/<repo>/pulls/<pr>/reviews --input review.json`, with `commit_id` set to head and `event: COMMENT`. Each new finding on a line the diff changes gets an inline comment in `comments[]` (path, line, `side: RIGHT`); GitHub rejects others, so they go in the review body. Each finding gives its ID, severity, problem, fix and pinned citation.
+   - Post a review every round, even with no new finding. Its body starts with `<!-- cleverways:review-round:<n> -->`, then the verdict line and a link to the tracker.
+   - Run `review-state.mjs resolve <pr>`, so the conversation shows only what is still open, plus the tracker.
    - Never approve, request changes or merge.
 8. **Verdict**, which is also the tracking comment's heading:
-   - **READY TO MERGE:** every acceptance item is covered with evidence, no open finding is medium or higher, there are no open questions, the checks pass on head, and linked PRs are aligned. The profile's Commands line `Checks:` says where checks run. With `ci` or no line, `gh pr checks` is green. With `local`, CI does not run on PRs, so you run the profile's check command on head and it passes. Record the run in the state's `checks` (where, command, sha, result line), which the tracker shows. Run `board.mjs set <pr url> <issue refs> --status "Ready to merge"` (the setting-up-project-tracking skill's script) so someone picks up the merge.
-   - **NEEDS FIXES:** any open finding or missing coverage. If the PR was Ready to merge on the board, move it and its issues back to In review.
+   - **Final pass.** A range round that would end READY first runs `scope <pr> --final` and the `code-review` it names (whole PR, medium), verified as in step 4. Late defects hide in code that fixes reshaped but no range shows again.
+   - **READY TO MERGE:** every acceptance item is covered with evidence, no open finding is medium or higher, there are no open questions, the checks pass on head, and linked PRs are aligned. A low finding outside the round's range never blocks. The profile's Commands line `Checks:` says where checks run. With `ci` or no line, `gh pr checks` is green. With `local`, run `node ${CLAUDE_SKILL_DIR}/../project-profile/scripts/checks.mjs` on head; every line must read PASS. Record the run in the state's `checks` (where, command, sha, result line). Move the PR and its issues to Ready to merge with `board.mjs`.
+   - **NEEDS FIXES:** an open finding of medium or higher, a new low finding in the range, or missing coverage. If the PR was Ready to merge on the board, move it and its issues back to In review.
    - **BLOCKED ON <who>:** the next step belongs to someone else.
 
 ## Loop control
 
-- A round runs only on a new head commit (step 1), so waiting for the author is a stop, not a loop.
-- Within a session, a new round starts only when this session pushed fixes (the fixing-issues skill) or the user asks again. Run at most three rounds per session.
+- A round runs only on a new head commit (step 2), so waiting for the author is a stop, not a loop.
+- A PR gets four rounds. `scope` and `put` refuse a fifth (exit 5) and print the open items. Set the verdict to BLOCKED ON user, put the tracker, and ask whether to allow more rounds; record a yes on that question as `extraRounds: <n>`.
+- Within a session, a new round starts only when this session pushed fixes (the fixing-issues skill) or the user asks again.
 - Stop when a round changes nothing: no new findings and no status changes. Report "stalled" with each open item and its owner.
-- Every open item has one owner: author, user or reviewer. Act on reviewer items. Hand the others over and stop. Never poll, sleep or wait for a reply.
+- Every open item has one owner: author, user or reviewer. Act on reviewer items; hand the others over and stop. Never poll, sleep or wait for a reply.
 
 ## Output
 
-Reply to the user in eight lines or fewer:
+Reply in six lines:
 1. The verdict.
 2. Round and head commit.
 3. Counts: new, fixed and open findings.

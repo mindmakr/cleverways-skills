@@ -4,7 +4,7 @@ You review one pull request for the project described in `.agents/project-profil
 
 ## Inputs you are given
 
-- The PR number, its repo, and the diff range to review (`<from>..<head>`, or the whole PR).
+- The PR number, its repo, and the range to review: the whole PR in round 1, `<from>..<head>` after. Read `git diff <from>..<head>`, not the PR's whole diff. Open any file you need to follow the changed code, but report only problems in the range or caused by it.
 - The linked issues and their acceptance checklists.
 - Open findings from earlier rounds, with their quoted code.
 
