@@ -49,34 +49,35 @@ const scope = (r, state, head, extra = []) => {
 };
 const fresh = { ...base, round: 0, reviewedSha: null, verdict: null };
 
-test('round 1 reviews the whole PR at high effort with security', () => {
+test('round 1 reviews the whole PR with the code-review skill on the PR, and security', () => {
   const r = repo();
   const { out } = scope(r, fresh, r.r1);
   assert.equal(out.mode, 'full');
   assert.equal(out.security, true);
   assert.equal(out.range, `${r.mainSha}..${r.r1}`);
-  assert.match(out.codeReview, /code-review high$/);
+  assert.equal(out.correctness, 'code-review high 1');
 });
 
-test('a follow-up round reviews only the new range at medium, without security when no relevant path changed', () => {
+test('a follow-up round reviews only the new range, by subagent, without security when no relevant path changed', () => {
   const r = repo();
   const { out } = scope(r, { ...base, round: 1, reviewedSha: r.r1 }, r.plain);
   assert.equal(out.mode, 'range');
   assert.equal(out.range, `${r.r1}..${r.plain}`);
   assert.equal(out.files, 1);
   assert.equal(out.security, false);
-  assert.match(out.codeReview, /code-review high$/);
+  assert.match(out.correctness, /^subagent: correctness-brief\.md/);
 });
 
-test('prepare gives code-review a default diff that is exactly the range', () => {
+test('prepare and diff work from another directory and show exactly the range, at a per-head path', () => {
   const r = repo();
-  const dir = join(mkdtempSync(join(tmpdir(), 'review-wt-')), 'wt');
-  const { out } = scope(r, { ...base, round: 1, reviewedSha: r.r1 }, r.route, ['--dir', dir]);
-  for (const c of out.prepare) execFileSync(c, { cwd: r.dir, shell: true, stdio: 'ignore' });
-  // What the code-review skill reads when given no target.
-  const reviewed = execFileSync('git', ['diff', '--name-only', '@{upstream}...HEAD'], { cwd: dir, encoding: 'utf8' }).trim().split('\n');
-  assert.deepEqual(reviewed, ['src/routes/auth/login.ts', 'src/services/report.ts']);
-  for (const c of out.cleanup) execFileSync(c, { cwd: r.dir, shell: true, stdio: 'ignore' });
+  const { out } = scope(r, { ...base, round: 1, reviewedSha: r.r1 }, r.route);
+  assert.ok(out.dir.endsWith(`review-1-${r.route.slice(0, 7)}`));
+  const elsewhere = mkdtempSync(join(tmpdir(), 'elsewhere-'));
+  execFileSync(out.prepare.replace('git ', `git -C "${r.dir}" `), { cwd: elsewhere, shell: true, stdio: 'ignore' });
+  const files = execFileSync(`${out.diff} --name-only`, { cwd: elsewhere, shell: true, encoding: 'utf8' }).trim().split('\n');
+  assert.deepEqual(files, ['src/routes/auth/login.ts', 'src/services/report.ts']);
+  execFileSync(out.cleanup, { cwd: r.dir, shell: true, stdio: 'ignore' });
+  assert.equal(execFileSync('git', ['branch', '--list', 'review-*'], { cwd: r.dir, encoding: 'utf8' }).trim(), '');
 });
 
 test('a follow-up range that touches a route or auth file runs security again', () => {
@@ -86,12 +87,13 @@ test('a follow-up range that touches a route or auth file runs security again', 
   assert.deepEqual(out.securityFiles, ['src/routes/auth/login.ts']);
 });
 
-test('the final pass reads the whole PR at medium, without security', () => {
+test('the final pass reads the whole PR with the code-review skill, without security', () => {
   const r = repo();
   const { out } = scope(r, { ...base, round: 2, reviewedSha: r.plain }, r.route, ['--final']);
   assert.equal(out.mode, 'final');
   assert.equal(out.security, false);
   assert.equal(out.range, `${r.mainSha}..${r.route}`);
+  assert.equal(out.correctness, 'code-review high 1');
 });
 
 test('nothing new pushed: scope says so and reviews nothing', () => {
@@ -115,6 +117,11 @@ test('rounds 2 to 4 are allowed', () => {
   assert.equal(scope(r, { ...base, round: 3, reviewedSha: r.r1 }, r.plain).status, 0);
 });
 
+test('scope refuses a stored state with no whole-number round', () => {
+  const r = repo();
+  for (const round of [undefined, 'x', -1, 2.5]) assert.equal(scope(r, { ...base, round, reviewedSha: r.r1 }, r.plain).status, 5);
+});
+
 test('an answered question with extraRounds lets the user allow more rounds', () => {
   const r = repo();
   const questions = [{ id: 'Q1', text: 'Allow two more rounds?', status: 'answered', answer: 'yes', extraRounds: 2 }];
@@ -126,28 +133,43 @@ test('an answered question with extraRounds lets the user allow more rounds', ()
   assert.equal(scope(r, { ...base, round: 4, reviewedSha: r.r1, questions: open }, r.plain).status, 5);
 });
 
+const put = (next, stored) => run(['put', '1', '--repo', 'o/r', '--file', stateFile(next), '--dry', ...(stored ? ['--stored', stateFile(stored)] : [])]);
+
 test('put refuses a state past the cap', () => {
-  const res = run(['put', '1', '--repo', 'o/r', '--file', stateFile({ ...base, round: 5 }), '--dry']);
-  assert.equal(res.status, 5);
-  assert.equal(run(['put', '1', '--repo', 'o/r', '--file', stateFile({ ...base, round: 4 }), '--dry']).status, 0);
+  assert.equal(put({ ...base, round: 5 }).status, 5);
+  assert.equal(put({ ...base, round: 4 }).status, 0);
 });
 
-test('put refuses a round lower than the stored one', () => {
-  const res = run(['put', '1', '--repo', 'o/r', '--file', stateFile({ ...base, round: 2 }), '--dry', '--stored', stateFile({ ...base, round: 3 })]);
+test('put refuses a round lower than the stored one, or missing, or not a whole number', () => {
+  const stored = { ...base, round: 4 };
+  const res = put({ ...base, round: 2 }, stored);
   assert.equal(res.status, 5);
-  assert.match(res.stderr, /lower than the stored round 3/);
-  assert.equal(run(['put', '1', '--repo', 'o/r', '--file', stateFile({ ...base, round: 3 }), '--dry', '--stored', stateFile({ ...base, round: 3 })]).status, 0);
+  assert.match(res.stderr, /lower than the stored round 4/);
+  const { round, ...noRound } = base;
+  for (const next of [noRound, { ...base, round: 'x' }, { ...base, round: 0 }, { ...base, round: 4.5 }]) assert.equal(put(next, stored).status, 5);
+  assert.equal(put({ ...base, round: 4 }, stored).status, 0);
 });
 
-test('extraRounds must be a positive whole number, so it cannot lower or fudge the cap', () => {
-  for (const extraRounds of [-2, 0, 1.5, '3']) {
-    const questions = [{ id: 'Q1', text: 'More rounds?', status: 'answered', answer: 'yes', extraRounds }];
-    const res = run(['put', '1', '--repo', 'o/r', '--file', stateFile({ ...base, round: 3, questions }), '--dry']);
-    assert.equal(res.status, 5, `extraRounds ${JSON.stringify(extraRounds)} accepted`);
-    assert.match(res.stderr, /positive whole number/);
+test('extraRounds is granted only by answering a question the tracker held open, from 1 to 4', () => {
+  const asked = { id: 'Q1', text: 'Allow more rounds?', status: 'open', answer: null };
+  const stored = { ...base, round: 4, questions: [asked] };
+  const grant = (extraRounds, from = stored) => put({ ...base, round: 4, questions: [{ ...asked, status: 'answered', answer: 'yes', extraRounds }] }, from);
+  assert.equal(grant(2).status, 0);
+  for (const bad of [-2, 0, 1.5, '3', 5, 1000]) {
+    const res = grant(bad);
+    assert.equal(res.status, 5, `extraRounds ${JSON.stringify(bad)} accepted`);
+    assert.match(res.stderr, /from 1 to 4/);
   }
+  // A question added already answered, with no open question stored, grants nothing.
+  const res = grant(2, { ...base, round: 4, questions: [] });
+  assert.equal(res.status, 5);
+  assert.match(res.stderr, /already holds open/);
+  // Once granted, the same value is kept; raising it later is refused.
+  const granted = { ...base, round: 5, questions: [{ ...asked, status: 'answered', answer: 'yes', extraRounds: 2 }] };
+  assert.equal(put(granted, granted).status, 0);
+  assert.equal(put({ ...granted, questions: [{ ...granted.questions[0], extraRounds: 4 }] }, granted).status, 5);
+  // scope ignores an out-of-range value.
   const r = repo();
-  const questions = [{ id: 'Q1', text: 'More rounds?', status: 'answered', answer: 'yes', extraRounds: -3 }];
-  const res = scope(r, { ...base, round: 1, reviewedSha: r.r1, questions }, r.plain);
-  assert.equal(res.out.cap, 4);
+  const q = [{ ...asked, status: 'answered', extraRounds: -3 }];
+  assert.equal(scope(r, { ...base, round: 1, reviewedSha: r.r1, questions: q }, r.plain).out.cap, 4);
 });

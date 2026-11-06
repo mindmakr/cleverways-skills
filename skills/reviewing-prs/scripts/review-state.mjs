@@ -12,10 +12,11 @@
 //   node review-state.mjs scope <pr> [--final] [--head sha] [--base ref] [--state state.json] [--repo owner/repo]
 //                                prints what the next round reviews, and the commands that set it up
 //
-// Round cap: a PR gets four rounds. Each answered question with `extraRounds: n` (the user allowed
-// n more; a positive whole number) raises it by n. `scope` exits 5 when the next round is past the
-// cap and lists the open items; `put` refuses a state whose round is past the cap, lower than the
-// stored round, or whose extraRounds is not a positive whole number. The verdict is then BLOCKED ON user.
+// Round cap: a PR gets four rounds. A question the user answers allowing more carries
+// `extraRounds: n` (1 to 4) and raises the cap by n. `scope` exits 5 when the next round is past
+// the cap and lists the open items; the verdict is then BLOCKED ON user. `put` refuses (exit 5) a
+// state whose round is not a whole number at least the stored one, is past the cap, or whose
+// extraRounds is out of range or was not granted by answering a question the tracker held open.
 //
 // State: { pr, round, reviewedSha, issues: [n], verdict, blockedOn,
 //          findings: [{ id, fp, severity, status, summary, where, round }],
@@ -41,16 +42,23 @@ let repoName = opt('repo');
 const repoOf = () => (repoName ??= gh(['repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner']).trim());
 
 const CAP = 4;
+const MAX_EXTRA = 4;
+const validExtra = (n) => Number.isInteger(n) && n >= 1 && n <= MAX_EXTRA;
 const capOf = (s) => CAP + (s.questions ?? [])
-  .filter((q) => q.status === 'answered' && Number.isInteger(q.extraRounds) && q.extraRounds > 0)
+  .filter((q) => q.status === 'answered' && validExtra(q.extraRounds))
   .reduce((n, q) => n + q.extraRounds, 0);
+const refuse = (why) => { console.error(why); process.exit(5); };
 function refusePut(next, stored) {
-  const bad = (next.questions ?? []).find((q) => q.extraRounds !== undefined && q.extraRounds !== null
-    && !(Number.isInteger(q.extraRounds) && q.extraRounds > 0));
-  if (bad) { console.error(`${bad.id}: extraRounds must be a positive whole number, not ${JSON.stringify(bad.extraRounds)}.`); process.exit(5); }
-  if (stored && next.round < stored.round) {
-    console.error(`Round ${next.round} is lower than the stored round ${stored.round}; a round number never goes back.`);
-    process.exit(5);
+  const prev = stored ?? { round: 0, questions: [] };
+  if (!Number.isInteger(next.round) || next.round < 1) refuse(`round must be a whole number of at least 1, not ${JSON.stringify(next.round)}.`);
+  if (next.round < prev.round) refuse(`Round ${next.round} is lower than the stored round ${prev.round}; a round number never goes back.`);
+  for (const q of next.questions ?? []) {
+    if (q.extraRounds === undefined || q.extraRounds === null) continue;
+    if (!validExtra(q.extraRounds)) refuse(`${q.id}: extraRounds must be a whole number from 1 to ${MAX_EXTRA}, not ${JSON.stringify(q.extraRounds)}.`);
+    const before = (prev.questions ?? []).find((x) => x.id === q.id);
+    const kept = before && before.status === 'answered' && before.extraRounds === q.extraRounds;
+    const granted = before && before.status === 'open' && q.status === 'answered';
+    if (!kept && !granted) refuse(`${q.id}: extraRounds can only be set when the user answers a question the tracker already holds open.`);
   }
   if (next.round > capOf(next)) refuseOverCap(next, next.round);
 }
@@ -165,10 +173,12 @@ if (cmd === 'resolve') {
   //    security-relevant path (a rebase that drops reviewedSha means the whole PR again);
   //  - --final: the whole PR once more, run by a follow-up round about to say READY, so code
   //    no range showed again is still read at the end. No security: round 1 had it.
-  // `prepare` makes a worktree at head whose branch has the range start as its upstream, so the
-  // code-review skill's default diff (@{upstream}...HEAD) is exactly the range, with no target to
-  // interpret. `cleanup` removes it.
+  // `prepare` makes a worktree at head (unique per head) that reviewers read by path, never by cd.
+  // Round 1 and the final pass name the PR as the code-review target. A range round hands the
+  // correctness review to a subagent with correctness-brief.md and `diff`, because a skill
+  // runs in the session's directory and cannot be pointed at a worktree.
   const state = opt('state') ? JSON.parse(readFileSync(opt('state'), 'utf8')) : find().state;
+  if (!Number.isInteger(state.round) || state.round < 0) refuse(`The stored round is ${JSON.stringify(state.round)}, not a whole number.`);
   const round = state.round + 1;
   if (round > capOf(state)) refuseOverCap(state, round);
   const final = rest.includes('--final');
@@ -186,21 +196,17 @@ if (cmd === 'resolve') {
   const start = ancestor ? from : git('merge-base', base, head).trim();
   const files = git('diff', '--name-only', '--no-renames', start, head).split('\n').filter(Boolean);
   const securityFiles = files.filter(securityRelevant);
-  const dir = (opt('dir') ?? join(tmpdir(), `review-${pr}`)).replace(/\\/g, '/');
-  const br = `review-${pr}`;
+  const dir = (opt('dir') ?? join(tmpdir(), `review-${pr}-${head.slice(0, 7)}`)).replace(/\\/g, '/');
+  const mode = final ? 'final' : ancestor ? 'range' : 'full';
   console.log(JSON.stringify({
-    round, cap: capOf(state), mode: final ? 'final' : ancestor ? 'range' : 'full',
-    range: `${start}..${head}`, head, files: files.length,
+    round, cap: capOf(state), mode, range: `${start}..${head}`, head, files: files.length,
     security: !final && (!from || securityFiles.length > 0),
     securityFiles,
-    prepare: [
-      `git worktree add --detach "${dir}" ${head}`,
-      `git -C "${dir}" checkout -q -B ${br} ${head}`,
-      `git -C "${dir}" branch -q -f ${br}-from ${start}`,
-      `git -C "${dir}" branch -q -u ${br}-from ${br}`,
-    ],
-    codeReview: `cd "${dir}" && code-review high`,
-    cleanup: [`git worktree remove --force "${dir}"`, `git branch -q -D ${br} ${br}-from`],
+    dir,
+    prepare: `git worktree add --detach "${dir}" ${head}`,
+    diff: `git -C "${dir}" diff ${start}..${head}`,
+    correctness: mode === 'range' ? 'subagent: correctness-brief.md, dir, diff' : `code-review high ${pr}`,
+    cleanup: `git worktree remove --force "${dir}"`,
   }, null, 2));
 } else if (cmd === 'get') {
   console.log(JSON.stringify(find(), null, 2));
