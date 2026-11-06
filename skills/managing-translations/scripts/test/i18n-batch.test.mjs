@@ -78,7 +78,7 @@ test('merge refuses the whole batch on a placeholder mismatch and writes nothing
   const before = readFileSync(join(dir, 'ar.json'), 'utf8');
   const { errors } = merge(fill(extract([dir], { locale: 'ar' }), { ...good, 'nav.home': 'الرئيسية {user}' }));
   assert.equal(errors.length, 1);
-  assert.match(errors[0], /nav\.home: placeholders \{user\} but en has \{\}/);
+  assert.match(errors[0], /nav\.home: placeholders \{user\} but the base has \{\}/);
   assert.equal(readFileSync(join(dir, 'ar.json'), 'utf8'), before);
 });
 
@@ -89,7 +89,7 @@ test('merge refuses empty values, {{var}} in an ICU file, and base text changed 
   const { errors } = merge(batch);
   assert.equal(errors.length, 3);
   assert.match(errors.join('\n'), /app\.items: empty/);
-  assert.match(errors.join('\n'), /nav\.home: wrong placeholder syntax/);
+  assert.match(errors.join('\n'), /nav\.home: syntax error \(icu\)/);
   assert.match(errors.join('\n'), /ewa\.cancelled: en text changed since extract/);
 });
 

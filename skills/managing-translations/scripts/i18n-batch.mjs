@@ -16,7 +16,7 @@
 import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { flatten, placeholders, syntaxChecker, compare, readJson, loadFlat } from './i18n-core.mjs';
+import { flatten, formatOf, analyse, placeholderProblem, compare, readJson, loadFlat } from './i18n-core.mjs';
 
 export const KINDS = ['missing', 'empty', 'syntax', 'placeholder', 'sameAsBase'];
 
@@ -95,7 +95,7 @@ export function checkBatch(batch) {
     const basePath = join(dirname(file), `${base}.json`);
     if (!existsSync(basePath)) { errors.push(`${file}: no ${base}.json beside it`); continue; }
     const baseMap = flatten(readJson(basePath));
-    const wrongSyntax = syntaxChecker(baseMap);
+    const format = formatOf(baseMap);
     for (const [key, item] of Object.entries(items)) {
       const value = item?.[locale];
       const src = baseMap.get(key);
@@ -104,8 +104,8 @@ export function checkBatch(batch) {
       else if (JSON.stringify(src) !== JSON.stringify(item[base])) fail(`${base} text changed since extract`);
       else if (value === undefined || value === null || value === '' || (typeof value === 'string' && !value.trim())) fail('empty');
       else if (!sameType(src, value)) fail(`type differs from ${base}`);
-      else if (wrongSyntax(value)) fail('wrong placeholder syntax for this file');
-      else if (placeholders(value) !== placeholders(src)) fail(`placeholders {${placeholders(value)}} but ${base} has {${placeholders(src)}}`);
+      else if (!analyse(value, format).ok) fail(`syntax error (${format})`);
+      else if (placeholderProblem(key, value, src, format)) fail(placeholderProblem(key, value, src, format));
     }
   }
   return errors;
