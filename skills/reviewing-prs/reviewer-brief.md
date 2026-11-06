@@ -12,9 +12,14 @@ You review one pull request for the project described in `.agents/project-profil
 
 1. **Coverage.** For every acceptance item of every linked issue, mark it covered, partial or missing, and cite the code or test that proves it. An item with no proof is "missing", not "probably covered".
 2. **Earlier findings.** For each open finding, say whether its quoted code is gone or changed so that the problem no longer exists (fixed), or is still there (open).
-3. **Profile non-negotiables.** Check each rule in the profile against the diff. Typical ones: where business logic lives, money units, every locale present, migrations made only with the tool, additive API for separately released clients, no fallbacks or shims, tenant and role scoping.
-4. **Cross-surface.** Every related repo and layer the profile lists: does the change need a matching change there, and is it in a linked PR?
-5. **Tests.** Tests exist for the changed behaviour, use the issue's figures, and would fail without the fix.
+3. **What the change does at run time.** Fixes are where new defects hide, so read every changed function whole, with what it calls and what calls it, and ask of each:
+   - Concurrency: locks and transactions (does code inside one need another connection from the same pool, or hold one while waiting?), two callers at once, the same write or message happening twice.
+   - Existing data: the first run after deploy over rows written before the change (scans, backfills, mass notices to old cases).
+   - Start-up and order: work done per record at boot or before the service is ready; side effects (mail, notices, external calls) before the write they report is saved, or after it failed.
+   - Who is told what: each message, note or log reaches exactly the people the code's own rules allow, with nothing internal in it.
+4. **Profile non-negotiables.** Check each rule in the profile against the diff. Typical ones: where business logic lives, money units, every locale present, migrations made only with the tool, additive API for separately released clients, no fallbacks or shims, tenant and role scoping.
+5. **Cross-surface.** Every related repo and layer the profile lists: does the change need a matching change there, and is it in a linked PR?
+6. **Tests.** Tests exist for the changed behaviour, use the issue's figures, and would fail without the fix.
 
 ## Output: JSON only
 

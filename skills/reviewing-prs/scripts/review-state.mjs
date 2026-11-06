@@ -7,13 +7,15 @@
 //   node review-state.mjs get <pr> [--repo owner/repo]                 prints { commentId, state }
 //   node review-state.mjs issues <pr> [--repo owner/repo]              prints linked issue numbers
 //   node review-state.mjs resolve <pr> [--repo owner/repo]             resolves inline threads of fixed findings
-//   node review-state.mjs put <pr> --file state.json [--repo owner/repo] [--dry]  creates or updates the comment (--dry prints it)
+//   node review-state.mjs put <pr> --file state.json [--repo owner/repo] [--dry [--stored old.json]]
+//                                creates or updates the comment (--dry prints it; --stored stands in for the comment)
 //   node review-state.mjs scope <pr> [--final] [--head sha] [--base ref] [--state state.json] [--repo owner/repo]
-//                                                                      prints what the next round reviews, and how
+//                                prints what the next round reviews, and the commands that set it up
 //
 // Round cap: a PR gets four rounds. Each answered question with `extraRounds: n` (the user allowed
-// n more) raises it by n. `scope` exits 5 when the next round is past the cap and lists the open
-// items; `put` refuses a state whose round is past the cap. Either way the verdict is BLOCKED ON user.
+// n more; a positive whole number) raises it by n. `scope` exits 5 when the next round is past the
+// cap and lists the open items; `put` refuses a state whose round is past the cap, lower than the
+// stored round, or whose extraRounds is not a positive whole number. The verdict is then BLOCKED ON user.
 //
 // State: { pr, round, reviewedSha, issues: [n], verdict, blockedOn,
 //          findings: [{ id, fp, severity, status, summary, where, round }],
@@ -40,7 +42,18 @@ const repoOf = () => (repoName ??= gh(['repo', 'view', '--json', 'nameWithOwner'
 
 const CAP = 4;
 const capOf = (s) => CAP + (s.questions ?? [])
-  .filter((q) => q.status === 'answered').reduce((n, q) => n + (Number(q.extraRounds) || 0), 0);
+  .filter((q) => q.status === 'answered' && Number.isInteger(q.extraRounds) && q.extraRounds > 0)
+  .reduce((n, q) => n + q.extraRounds, 0);
+function refusePut(next, stored) {
+  const bad = (next.questions ?? []).find((q) => q.extraRounds !== undefined && q.extraRounds !== null
+    && !(Number.isInteger(q.extraRounds) && q.extraRounds > 0));
+  if (bad) { console.error(`${bad.id}: extraRounds must be a positive whole number, not ${JSON.stringify(bad.extraRounds)}.`); process.exit(5); }
+  if (stored && next.round < stored.round) {
+    console.error(`Round ${next.round} is lower than the stored round ${stored.round}; a round number never goes back.`);
+    process.exit(5);
+  }
+  if (next.round > capOf(next)) refuseOverCap(next, next.round);
+}
 function refuseOverCap(s, round) {
   console.error(`Round ${round} is past this PR's cap of ${capOf(s)} rounds. Set the verdict to BLOCKED ON user, `
     + 'list the open items, and ask whether to allow more rounds (record the answer with extraRounds). Open items:');
@@ -146,12 +159,15 @@ if (cmd === 'resolve') {
   for (const m of (p.body ?? '').matchAll(/(?:^|[\s(])#(\d+)\b/g)) if (Number(m[1]) !== Number(pr)) nums.add(Number(m[1]));
   console.log(JSON.stringify([...nums].sort((a, b) => a - b)));
 } else if (cmd === 'scope') {
-  // What the next round reviews, and how:
-  //  - round 1: the whole PR at high effort, with the security scan and security review;
-  //  - later rounds: only reviewedSha..head at medium; security again only when that range
-  //    touches a security-relevant path (a rebase that drops reviewedSha means the whole PR);
-  //  - --final: the whole PR once more at medium, run by a follow-up round about to say READY,
-  //    so code no range showed again is still read at the end. No security: round 1 had it.
+  // What the next round reviews, and how. Every review runs at high effort.
+  //  - round 1: the whole PR, with the security scan and security review;
+  //  - later rounds: only reviewedSha..head; security again only when that range touches a
+  //    security-relevant path (a rebase that drops reviewedSha means the whole PR again);
+  //  - --final: the whole PR once more, run by a follow-up round about to say READY, so code
+  //    no range showed again is still read at the end. No security: round 1 had it.
+  // `prepare` makes a worktree at head whose branch has the range start as its upstream, so the
+  // code-review skill's default diff (@{upstream}...HEAD) is exactly the range, with no target to
+  // interpret. `cleanup` removes it.
   const state = opt('state') ? JSON.parse(readFileSync(opt('state'), 'utf8')) : find().state;
   const round = state.round + 1;
   if (round > capOf(state)) refuseOverCap(state, round);
@@ -170,21 +186,33 @@ if (cmd === 'resolve') {
   const start = ancestor ? from : git('merge-base', base, head).trim();
   const files = git('diff', '--name-only', '--no-renames', start, head).split('\n').filter(Boolean);
   const securityFiles = files.filter(securityRelevant);
-  const mode = final ? 'final' : ancestor ? 'range' : 'full';
-  const effort = mode === 'full' && !from ? 'high' : 'medium';
+  const dir = (opt('dir') ?? join(tmpdir(), `review-${pr}`)).replace(/\\/g, '/');
+  const br = `review-${pr}`;
   console.log(JSON.stringify({
-    round, cap: capOf(state), mode, range: `${start}..${head}`, head, effort, files: files.length,
+    round, cap: capOf(state), mode: final ? 'final' : ancestor ? 'range' : 'full',
+    range: `${start}..${head}`, head, files: files.length,
     security: !final && (!from || securityFiles.length > 0),
     securityFiles,
-    codeReview: mode === 'range' ? `code-review medium ${start}..${head}` : `code-review ${effort} ${pr}`,
+    prepare: [
+      `git worktree add --detach "${dir}" ${head}`,
+      `git -C "${dir}" checkout -q -B ${br} ${head}`,
+      `git -C "${dir}" branch -q -f ${br}-from ${start}`,
+      `git -C "${dir}" branch -q -u ${br}-from ${br}`,
+    ],
+    codeReview: `cd "${dir}" && code-review high`,
+    cleanup: [`git worktree remove --force "${dir}"`, `git branch -q -D ${br} ${br}-from`],
   }, null, 2));
 } else if (cmd === 'get') {
   console.log(JSON.stringify(find(), null, 2));
 } else {
   const state = JSON.parse(readFileSync(opt('file') ?? '', 'utf8'));
-  if (state.round > capOf(state)) refuseOverCap(state, state.round);
-  if (rest.includes('--dry')) { console.log(render(state)); process.exit(0); }
-  const { commentId } = find();
+  if (rest.includes('--dry')) {
+    refusePut(state, opt('stored') ? JSON.parse(readFileSync(opt('stored'), 'utf8')) : null);
+    console.log(render(state));
+    process.exit(0);
+  }
+  const { commentId, state: stored } = find();
+  refusePut(state, stored);
   const bodyFile = join(tmpdir(), `pr-review-${pr}.md`);
   writeFileSync(bodyFile, render(state));
   const res = commentId

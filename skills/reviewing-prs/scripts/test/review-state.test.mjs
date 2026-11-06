@@ -53,21 +53,30 @@ test('round 1 reviews the whole PR at high effort with security', () => {
   const r = repo();
   const { out } = scope(r, fresh, r.r1);
   assert.equal(out.mode, 'full');
-  assert.equal(out.effort, 'high');
   assert.equal(out.security, true);
   assert.equal(out.range, `${r.mainSha}..${r.r1}`);
-  assert.equal(out.codeReview, 'code-review high 1');
+  assert.match(out.codeReview, /code-review high$/);
 });
 
 test('a follow-up round reviews only the new range at medium, without security when no relevant path changed', () => {
   const r = repo();
   const { out } = scope(r, { ...base, round: 1, reviewedSha: r.r1 }, r.plain);
   assert.equal(out.mode, 'range');
-  assert.equal(out.effort, 'medium');
   assert.equal(out.range, `${r.r1}..${r.plain}`);
   assert.equal(out.files, 1);
   assert.equal(out.security, false);
-  assert.equal(out.codeReview, `code-review medium ${r.r1}..${r.plain}`);
+  assert.match(out.codeReview, /code-review high$/);
+});
+
+test('prepare gives code-review a default diff that is exactly the range', () => {
+  const r = repo();
+  const dir = join(mkdtempSync(join(tmpdir(), 'review-wt-')), 'wt');
+  const { out } = scope(r, { ...base, round: 1, reviewedSha: r.r1 }, r.route, ['--dir', dir]);
+  for (const c of out.prepare) execFileSync(c, { cwd: r.dir, shell: true, stdio: 'ignore' });
+  // What the code-review skill reads when given no target.
+  const reviewed = execFileSync('git', ['diff', '--name-only', '@{upstream}...HEAD'], { cwd: dir, encoding: 'utf8' }).trim().split('\n');
+  assert.deepEqual(reviewed, ['src/routes/auth/login.ts', 'src/services/report.ts']);
+  for (const c of out.cleanup) execFileSync(c, { cwd: r.dir, shell: true, stdio: 'ignore' });
 });
 
 test('a follow-up range that touches a route or auth file runs security again', () => {
@@ -81,10 +90,8 @@ test('the final pass reads the whole PR at medium, without security', () => {
   const r = repo();
   const { out } = scope(r, { ...base, round: 2, reviewedSha: r.plain }, r.route, ['--final']);
   assert.equal(out.mode, 'final');
-  assert.equal(out.effort, 'medium');
   assert.equal(out.security, false);
   assert.equal(out.range, `${r.mainSha}..${r.route}`);
-  assert.equal(out.codeReview, 'code-review medium 1');
 });
 
 test('nothing new pushed: scope says so and reviews nothing', () => {
@@ -123,4 +130,24 @@ test('put refuses a state past the cap', () => {
   const res = run(['put', '1', '--repo', 'o/r', '--file', stateFile({ ...base, round: 5 }), '--dry']);
   assert.equal(res.status, 5);
   assert.equal(run(['put', '1', '--repo', 'o/r', '--file', stateFile({ ...base, round: 4 }), '--dry']).status, 0);
+});
+
+test('put refuses a round lower than the stored one', () => {
+  const res = run(['put', '1', '--repo', 'o/r', '--file', stateFile({ ...base, round: 2 }), '--dry', '--stored', stateFile({ ...base, round: 3 })]);
+  assert.equal(res.status, 5);
+  assert.match(res.stderr, /lower than the stored round 3/);
+  assert.equal(run(['put', '1', '--repo', 'o/r', '--file', stateFile({ ...base, round: 3 }), '--dry', '--stored', stateFile({ ...base, round: 3 })]).status, 0);
+});
+
+test('extraRounds must be a positive whole number, so it cannot lower or fudge the cap', () => {
+  for (const extraRounds of [-2, 0, 1.5, '3']) {
+    const questions = [{ id: 'Q1', text: 'More rounds?', status: 'answered', answer: 'yes', extraRounds }];
+    const res = run(['put', '1', '--repo', 'o/r', '--file', stateFile({ ...base, round: 3, questions }), '--dry']);
+    assert.equal(res.status, 5, `extraRounds ${JSON.stringify(extraRounds)} accepted`);
+    assert.match(res.stderr, /positive whole number/);
+  }
+  const r = repo();
+  const questions = [{ id: 'Q1', text: 'More rounds?', status: 'answered', answer: 'yes', extraRounds: -3 }];
+  const res = scope(r, { ...base, round: 1, reviewedSha: r.r1, questions }, r.plain);
+  assert.equal(res.out.cap, 4);
 });
