@@ -23,6 +23,33 @@ test('a placeholder inside an ICU branch does not make the file i18next', () => 
   assert.equal(status, 0);
 });
 
+test('a stray {{name}} beside an ICU plural is a syntax error', () => {
+  const { status, result } = check({
+    en: { a: '{n, plural, one {# day} other {# days}} left' },
+    ar: { a: '{n, plural, one {# day} other {# days}} {{name}}' },
+  });
+  assert.deepEqual(result.syntax, ['a']);
+  assert.equal(status, 1);
+});
+
+test('a renamed placeholder fails parity', () => {
+  const { status, result } = check({
+    en: { a: '{by, select, platform {PayDay} other {{company}}} changed it' },
+    ar: { a: '{by, select, platform {PayDay} other {{compny}}} غيّرها' },
+  });
+  assert.deepEqual(result.placeholder, ['a']);
+  assert.equal(status, 1);
+});
+
+test('a plural missing its closing brace is a syntax error', () => {
+  const { status, result } = check({
+    en: { a: '{n, plural, one {# day} other {# days}}' },
+    ar: { a: '{n, plural, one {# يوم} other {# أيام}' },
+  });
+  assert.deepEqual(result.syntax, ['a']);
+  assert.equal(status, 1);
+});
+
 test('{{var}} in an ICU file is still a syntax error', () => {
   const { status, result } = check({ en: { b: 'Hello {name}' }, ar: { b: 'مرحبا {{name}}' } });
   assert.deepEqual(result.syntax, ['b']);

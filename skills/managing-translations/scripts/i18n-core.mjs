@@ -26,17 +26,26 @@ export function placeholders(value) {
   return [...names].sort().join(',');
 }
 
-const ICU_BLOCK = /\{\s*\w+\s*,\s*(plural|select|selectordinal)\s*,/;
-// {{var}} is i18next only outside an ICU block: in "other {{company}}" the outer
-// braces are the ICU branch around the {company} variable.
-const i18nextVar = (v) => typeof v === 'string' && /\{\{\s*[A-Za-z_][\w.]*\s*\}\}/.test(v) && !ICU_BLOCK.test(v);
+// Walk the braces once. A {{var}} at depth 0 is an i18next variable; one inside
+// an ICU construct, as in "other {{company}}", is a branch around {company}.
+function scan(v) {
+  let depth = 0, i18next = false, balanced = true;
+  for (let i = 0; i < v.length; i++) {
+    if (depth === 0 && /^\{\{\s*[A-Za-z_][\w.]*\s*\}\}/.test(v.slice(i, i + 80))) i18next = true;
+    if (v[i] === '{') depth++;
+    else if (v[i] === '}' && --depth < 0) balanced = false;
+  }
+  return { i18next, balanced: balanced && depth === 0 };
+}
+const i18nextVar = (v) => typeof v === 'string' && scan(v).i18next;
 
 // The base locale decides the syntax: any i18next {{var}} means i18next, otherwise ICU.
+// Unbalanced braces are wrong in either.
 export function syntaxChecker(baseMap) {
   const i18next = [...baseMap.values()].some(i18nextVar);
-  return (v) => typeof v === 'string' && (i18next
+  return (v) => typeof v === 'string' && (!scan(v).balanced || (i18next
     ? /\{\s*\w+\s*,\s*(plural|select)/.test(v) || /(^|[^{])\{\s*[A-Za-z_]\w*\s*\}(?!\})/.test(v)
-    : i18nextVar(v));
+    : i18nextVar(v)));
 }
 
 export const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'));

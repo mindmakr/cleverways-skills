@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // Compares every <locale>.json in a directory against a base locale.
-// Errors (exit 1): missing keys, extra keys, empty values, wrong syntax for the
+// Errors (exit 1): missing keys, extra keys, empty values, placeholder names that
+// differ from the base, unbalanced braces, wrong syntax for the
 // file's format (ICU in an i18next file, or {{var}} in an ICU file).
-// Warnings: placeholder mismatch, value identical to the base (possibly untranslated).
+// Warning: value identical to the base (possibly untranslated).
 //
 // Usage: node i18n-parity.mjs <dir> [<dir> ...] [--base en] [--json]
 // Handles next-intl ICU ({name}, {count, plural, ...}) and i18next ({{name}}).
@@ -28,7 +29,7 @@ if (dirs.length === 0) {
 }
 
 const results = dirs.flatMap((dir) => checkDir(dir, base));
-const failed = results.some((r) => r.missing.length || r.extra.length || r.empty.length || r.syntax.length);
+const failed = results.some((r) => r.missing.length || r.extra.length || r.empty.length || r.syntax.length || r.placeholder.length);
 
 if (json) {
   console.log(JSON.stringify(results, null, 2));
