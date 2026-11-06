@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Compares every <locale>.json in a directory against a base locale.
 // Errors (exit 1): missing keys, extra keys, empty values, syntax errors (an ICU
-// value that does not parse, or the other format's placeholders), and placeholder
-// names that differ from the base. An i18next _zero/_one/_two/_few/_many key may
+// value formatjs would reject, or the other format's placeholders), and arguments
+// or rich-text tags that differ from the base. An i18next _zero/_one/_two/_few/_many key may
 // leave out {{count}}. Warning: value identical to the base (possibly untranslated).
 //
 // Usage: node i18n-parity.mjs <dir> [<dir> ...] [--base en] [--json]

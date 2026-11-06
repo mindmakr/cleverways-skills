@@ -19,7 +19,7 @@ node ${CLAUDE_SKILL_DIR}/scripts/i18n-parity.mjs <dir> [<dir> ...] --base <base>
 
 Outside Claude Code, `${CLAUDE_SKILL_DIR}` is this skill's folder.
 
-It exits 1 on `missing`, `extra`, `empty`, `syntax` and `placeholder` keys (names differ from the base). It warns on `sameAsBase` (probably untranslated). `--json` lists them all.
+It exits 1 on `missing`, `extra`, `empty`, `syntax` and `placeholder` keys (arguments or tags differ). It warns on `sameAsBase` (probably untranslated). `--json` lists them all.
 
 ## Translate in bulk
 
