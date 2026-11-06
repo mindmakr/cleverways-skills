@@ -1,0 +1,1 @@
+{"a":"Hi {{name}}","b":"$t(days, {\"count\": {{n}} }) left"}
