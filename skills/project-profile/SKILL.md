@@ -25,6 +25,17 @@ Project facts live in `.agents/project-profile.md` at the repository root, and n
 4. Add one line to CLAUDE.md and AGENTS.md (create AGENTS.md if missing): `Project facts for agents: .agents/project-profile.md`.
 5. Commit it through the project's normal PR flow.
 
+## Trim the prompt prefix (optional, once per project)
+
+Every agent turn re-sends the names and descriptions of all enabled plugins, skills and MCP servers. Offer to trim what this project does not use.
+
+1. If the coordinator plugin is installed, use its prefix check instead and stop here.
+2. Run `node ${CLAUDE_SKILL_DIR}/scripts/prefix.mjs report`: counts of plugins, user skills (links included) and MCP servers. Ask the person for the `/context` token figure, or note it was not measured.
+3. Keep this plugin, the plugins and servers that the project's `.claude/settings.json` and `.mcp.json` name, and anything the person names (`--keep a,b`). Propose off the rest, with one reason per group.
+4. `node ${CLAUDE_SKILL_DIR}/scripts/prefix.mjs draft` prints the merged `.claude/settings.local.json`. Show it. Add `--sync-off` only if the person agrees to drop claude.ai skills, plugins and connectors.
+5. Only after approval, run `write --confirm` with the same flags. It also adds the file to `.git/info/exclude`. It never edits `~/.claude/settings.json`.
+6. Tell the person: plugin changes load only in a new Claude process (`/clear` keeps the old plugins). To undo, delete the keys or the file.
+
 ## What belongs in it
 
 - Facts a skill acts on: paths, commands, names, rules, labels. One line each.
