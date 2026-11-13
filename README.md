@@ -117,7 +117,7 @@ Type the slash command, or describe the task in words; the agent picks the skill
 | testing-mobile-visually | `/cleverways:testing-mobile-visually` | The same for the app, on a local emulator. |
 | setting-up-project-tracking | `/cleverways:setting-up-project-tracking` | A GitHub Project across the profile's repos with sprints, a Release field and six views, the open issues and PRs on it, and a release-notes config PR per repo. "Sync the board" brings an existing board up to date. |
 | running-scrum | `/cleverways:running-scrum standup` (or `planning`, `refinement`, `pr-triage`, `sprint-close`, `release`; add `--dry` to only list changes) | The board synced, unowned work assigned, stuck and conflicting items named with their owner, old issues re-checked before they enter a sprint, and one status page. It never merges, deploys or tags. |
-| project-profile | "set up the project profile" | `.agents/project-profile.md`, filled from the repo plus your answers. |
+| project-profile | "set up the project profile" | `.agents/project-profile.md`, filled from the repo plus your answers. Offers a per-project trim of the prompt prefix: a measured draft of `.claude/settings.local.json`, written only after you approve. |
 
 Other agents: name the skill in plain words, for example "use the investigating-issues skill on this report".
 
@@ -126,6 +126,8 @@ When a skill needs a decision, it asks one question with options and a recommend
 ## Set up a project
 
 Ask your agent: "set up the project profile". The `project-profile` skill fills `.agents/project-profile.md` from the repo and asks about anything the repo can't answer. Commit the file.
+
+The same skill can trim the fixed prompt prefix for this project: it measures the enabled plugins, user skills and MCP servers, drafts a `.claude/settings.local.json` that turns off the unused ones, and writes it (kept out of git) only after you approve. Plugin changes need a new Claude process.
 
 ## Update
 
