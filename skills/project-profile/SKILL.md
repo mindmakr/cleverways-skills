@@ -29,7 +29,7 @@ Project facts live in `.agents/project-profile.md` at the repository root, and n
 
 Every agent turn re-sends the names and descriptions of all enabled plugins, skills and MCP servers. Offer to trim what this project does not use.
 
-1. Run `node ${CLAUDE_SKILL_DIR}/scripts/prefix.mjs report`: counts of plugins, user skills (links included) and MCP servers. If its plugin lists (`keep` or `off`) hold a `coordinator@` entry, the coordinator plugin is installed: use its prefix check instead and stop here.
+1. Run `node ${CLAUDE_SKILL_DIR}/scripts/prefix.mjs report`: counts of plugins, user skills (links included) and MCP servers. If the file `skills/coordinator/scripts/prefix.mjs` exists under the `installPath` of the `coordinator@coordinator` entry in `~/.claude/plugins/installed_plugins.json`, use that prefix check instead and stop here. Otherwise (none ships one yet) continue.
 2. Ask the person for the `/context` token figure, or note it was not measured.
 3. Keep this plugin, the plugins and servers that the project's `.claude/settings.json` and `.mcp.json` name, and anything the person names (`--keep a,b`). Propose off the rest, with one reason per group.
 4. `node ${CLAUDE_SKILL_DIR}/scripts/prefix.mjs draft` prints the merged `.claude/settings.local.json`. Show it. Add `--sync-off` only if the person agrees to drop claude.ai skills, plugins and connectors.

@@ -233,3 +233,71 @@ test('descriptions written as YAML block scalars count the text', () => {
   assert.equal(chars('literal'), 'Use when one.\nThen two.'.length);
   assert.equal(chars('crlf'), 'Use when one.'.length);
 });
+
+test('write excludes a project folder whose name has gitignore characters', () => {
+  const { home } = setup();
+  const repo = mkdtempSync(join(tmpdir(), 'prefix-esc-'));
+  spawnSync('git', ['init', '-q', repo]);
+  for (const name of ['sp ace[x]', '#hash', '!bang', ...(process.platform === 'win32' ? [] : ['star*q?'])]) {
+    const project = join(repo, name);
+    mkdirSync(project, { recursive: true });
+    const r = run(home, project, 'write', '--confirm');
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(run(home, project, 'write', '--confirm').status, 0);
+    const status = spawnSync('git', ['-C', repo, 'status', '--porcelain', '-uall'], { encoding: 'utf8' }).stdout;
+    assert.ok(!status.includes('settings.local.json'), `${name}: ${status}`);
+  }
+});
+
+test('a flag value that starts with -- counts as missing', () => {
+  const { home, project } = setup();
+  for (const args of [
+    ['draft', '--keep', '--sync-off'],
+    ['write', '--project', '--confirm'],
+    ['report', '--home', '--keep', 'a'],
+    ['draft', '--keep'],
+  ]) {
+    const r = spawnSync(process.execPath, [script, ...args, '--home', home, '--project', project], { encoding: 'utf8' });
+    assert.equal(r.status, 2, args.join(' '));
+    assert.match(r.stderr, /^usage:/, args.join(' '));
+  }
+});
+
+test('block scalar headers take either indicator order and a trailing comment', () => {
+  const { home } = setup();
+  const skills = join(home, '.claude', 'skills');
+  const heads = ['>2-', '|+', '>-2', '> # note', '|2+ # note', '>'];
+  heads.forEach((h, i) => {
+    mkdirSync(join(skills, `blk${i}`), { recursive: true });
+    writeFileSync(join(skills, `blk${i}`, 'SKILL.md'), `---\nname: blk${i}\ndescription: ${h}\n  Use when one.\n---\n`);
+  });
+  const all = userSkills(home);
+  heads.forEach((h, i) => assert.equal(all.find((s) => s.name === `blk${i}`).chars, 'Use when one.'.length, h));
+});
+
+test('a settings file that does not parse warns on stderr, names the file and still drafts', () => {
+  const { home, project } = setup();
+  const user = join(home, '.claude', 'settings.json');
+  const proj = join(project, '.claude', 'settings.json');
+  mkdirSync(join(proj, '..'), { recursive: true });
+  writeFileSync(proj, '{ not json');
+  let r = run(home, project, 'draft');
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(r.stderr.includes(proj), r.stderr);
+  assert.ok(JSON.parse(r.stdout).enabledPlugins);
+  writeFileSync(proj, '{}');
+  writeFileSync(user, '{ not json');
+  r = run(home, project, 'draft');
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(r.stderr.includes(user), r.stderr);
+  assert.ok(!existsSync(join(project, '.claude', 'settings.local.json')));
+});
+
+test('trimmed counts only entries that turn something off', () => {
+  const { home, project } = setup();
+  const file = join(project, '.claude', 'settings.local.json');
+  json(file, { enabledPlugins: { 'ecc@ecc': true }, skillOverrides: { beta: 'on' } });
+  assert.equal(report(project, home).trimmed, false);
+  json(file, { enabledPlugins: { 'ecc@ecc': true, 'tool@m': false } });
+  assert.equal(report(project, home).trimmed, true);
+});

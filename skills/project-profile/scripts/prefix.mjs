@@ -36,6 +36,28 @@ const readJson = (file) => {
   }
 };
 
+// A settings file that exists, has text and does not parse: warn once on stderr
+// (naming the file) and treat it as empty. A missing or empty file is silent.
+const warned = new Set();
+const readSettings = (file) => {
+  let text;
+  try {
+    text = readFileSync(file, 'utf8').replace(/^﻿/, '');
+  } catch {
+    return null;
+  }
+  if (!text.trim()) return null;
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    if (!warned.has(file)) {
+      warned.add(file);
+      console.error(`warning: ${file} is not valid JSON (${e.message}); treating it as empty`);
+    }
+    return null;
+  }
+};
+
 // The project's own local file. Missing or empty is {}; present but not a JSON
 // object is an error, so a draft or a write never drops the keys it cannot read.
 const localSettings = (project) => {
@@ -75,7 +97,7 @@ const description = (file) => {
     const d = m && /^description:[ \t]*(.*)$/m.exec(m[1]);
     if (!d) return 0;
     const head = d[1].trim();
-    const block = /^([>|])[+-]?\d*$/.exec(head);
+    const block = /^([>|])(?:[1-9][+-]?|[+-][1-9]?)?(?:\s+#.*)?$/.exec(head);
     if (block) {
       // YAML block scalar: the text is on the indented lines that follow.
       const rest = m[1].slice(d.index + d[0].length).split(/\r?\n/).slice(1);
@@ -113,7 +135,8 @@ export function enabledPlugins(project, home) {
   ];
   const out = {};
   for (const [layer, file] of files) {
-    const ep = readJson(file)?.enabledPlugins;
+    // the local file is checked, and stops the run, by localSettings
+    const ep = (layer === 'local' ? readJson(file) : readSettings(file))?.enabledPlugins;
     if (ep && typeof ep === 'object') for (const [k, v] of Object.entries(ep)) out[k] = { on: v === true, layer };
   }
   return out;
@@ -140,7 +163,7 @@ const matches = (keep, key) => keep.includes(key) || keep.includes(bare(key));
 // What the project's own files keep on: its settings.json plugins, anything the
 // person named, the setup plugin, and plugins the local file already turns on.
 export function keepers(project, home, keep = []) {
-  const projectOn = Object.entries(readJson(join(project, '.claude', 'settings.json'))?.enabledPlugins || {})
+  const projectOn = Object.entries(readSettings(join(project, '.claude', 'settings.json'))?.enabledPlugins || {})
     .filter(([, v]) => v === true)
     .map(([k]) => k);
   const localOn = Object.entries(localSettings(project).enabledPlugins || {})
@@ -160,7 +183,9 @@ export function report(project, home, keep = []) {
     plugins: { enabled: on.length, keep: on.filter((k) => matches(kept, k)), off: on.filter((k) => !matches(kept, k)) },
     skills: { count: skills.length, descriptionChars: skills.reduce((n, s) => n + s.chars, 0) },
     mcpServers: { count: servers.length, names: servers },
-    trimmed: ['enabledPlugins', 'skillOverrides'].some((k) => Object.keys(local[k] || {}).length > 0),
+    trimmed:
+      Object.values(local.enabledPlugins || {}).some((v) => v === false) ||
+      Object.values(local.skillOverrides || {}).some((v) => v === 'off'),
   };
 }
 
@@ -190,8 +215,15 @@ export function draft(project, home, { keep = [], syncOff = false } = {}) {
 
 // The project's path under the repo root, with a trailing slash ("" at the root).
 function prefixInRepo(project) {
-  return execFileSync('git', ['-C', project, 'rev-parse', '--show-prefix'], { encoding: 'utf8' }).trim();
+  return execFileSync('git', ['-C', project, 'rev-parse', '--show-prefix'], { encoding: 'utf8' }).replace(/\r?\n$/, '');
 }
+
+// One path as a gitignore line: a backslash before characters that mean
+// something there, and before leading or trailing spaces.
+const ignoreEntry = (path) =>
+  path
+    .replace(/[\\[\]*?!#]/g, '\\$&')
+    .replace(/^ +| +$/g, (m) => m.replace(/ /g, '\\ '));
 
 function excludeFile(project) {
   const p = execFileSync('git', ['-C', project, 'rev-parse', '--git-path', 'info/exclude'], { encoding: 'utf8' }).trim();
@@ -206,7 +238,7 @@ export function write(project, home, opts) {
   let excluded = false;
   try {
     const ex = excludeFile(project);
-    const entry = prefixInRepo(project) + LOCAL;
+    const entry = ignoreEntry(prefixInRepo(project) + LOCAL);
     const text = existsSync(ex) ? readFileSync(ex, 'utf8') : '';
     if (!text.split(/\r?\n/).includes(entry)) {
       mkdirSync(dirname(ex), { recursive: true });
@@ -240,10 +272,13 @@ function run(argv) {
     const a = rest[i];
     if (a === '--project' || a === '--home') {
       const v = rest[++i];
-      if (!v) return usage();
+      if (!v || v.startsWith('--')) return usage();
       opt[a.slice(2)] = resolve(v);
+    } else if (a === '--keep') {
+      const v = rest[++i];
+      if (v === undefined || v.startsWith('--')) return usage();
+      opt.keep = v.split(',').map((s) => s.trim()).filter(Boolean);
     }
-    else if (a === '--keep') opt.keep = (rest[++i] || '').split(',').map((s) => s.trim()).filter(Boolean);
     else if (a === '--sync-off') opt.syncOff = true;
     else if (a === '--confirm') opt.confirm = true;
     else {
