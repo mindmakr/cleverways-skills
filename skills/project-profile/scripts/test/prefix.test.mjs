@@ -158,3 +158,78 @@ test('an empty local file and a file with a byte order mark are read', () => {
   writeFileSync(file, '\uFEFF{"permissions":{"allow":["Bash(ls)"]}}');
   assert.deepEqual(draft(project, home).permissions, { allow: ['Bash(ls)'] });
 });
+
+test('write in a subfolder of a git repo excludes the path under the repo root', () => {
+  const { home } = setup();
+  const repo = mkdtempSync(join(tmpdir(), 'prefix-sub-'));
+  spawnSync('git', ['init', '-q', repo]);
+  const project = join(repo, 'sub');
+  mkdirSync(project, { recursive: true });
+  const r = run(home, project, 'write', '--confirm');
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(existsSync(join(project, '.claude', 'settings.local.json')));
+  const exclude = readFileSync(join(repo, '.git', 'info', 'exclude'), 'utf8');
+  assert.equal(exclude.split('\n').filter((l) => l === 'sub/.claude/settings.local.json').length, 1);
+  assert.equal(run(home, project, 'write', '--confirm').status, 0);
+  const again = readFileSync(join(repo, '.git', 'info', 'exclude'), 'utf8');
+  assert.equal(again.split('\n').filter((l) => l === 'sub/.claude/settings.local.json').length, 1);
+  const status = spawnSync('git', ['-C', repo, 'status', '--porcelain', '-uall'], { encoding: 'utf8' }).stdout;
+  assert.ok(!status.includes('settings.local.json'), status);
+});
+
+test('--project or --home with no value prints the usage line and exits 2', () => {
+  for (const flag of ['--project', '--home']) {
+    const r = spawnSync(process.execPath, [script, 'report', flag], { encoding: 'utf8' });
+    assert.equal(r.status, 2, flag);
+    assert.match(r.stderr, /^usage:/, flag);
+    assert.ok(!r.stderr.includes('at '), flag);
+  }
+});
+
+test('an enabledPlugins or skillOverrides that is not an object stops with an error and writes nothing', () => {
+  for (const key of ['enabledPlugins', 'skillOverrides']) {
+    for (const bad of [['x'], 'text', null, 3]) {
+      const { home, project } = setup();
+      const file = join(project, '.claude', 'settings.local.json');
+      const text = JSON.stringify({ [key]: bad });
+      mkdirSync(join(file, '..'), { recursive: true });
+      writeFileSync(file, text);
+      for (const args of [['draft'], ['write', '--confirm'], ['report']]) {
+        const r = run(home, project, ...args);
+        assert.equal(r.status, 1, `${key} ${text} ${args[0]}`);
+        assert.match(r.stderr, new RegExp(`${key} is not a JSON object`));
+        assert.equal(r.stdout, '');
+      }
+      assert.equal(readFileSync(file, 'utf8'), text);
+    }
+  }
+});
+
+test('report says trimmed only when the local file turns plugins or skills off', () => {
+  const { home, project } = setup();
+  const file = join(project, '.claude', 'settings.local.json');
+  json(file, { permissions: { allow: ['Bash(ls)'] } });
+  assert.equal(report(project, home).trimmed, false);
+  json(file, { enabledPlugins: {} });
+  assert.equal(report(project, home).trimmed, false);
+  json(file, { enabledPlugins: { 'ecc@ecc': false } });
+  assert.equal(report(project, home).trimmed, true);
+  json(file, { skillOverrides: { beta: 'off' } });
+  assert.equal(report(project, home).trimmed, true);
+});
+
+test('descriptions written as YAML block scalars count the text', () => {
+  const { home } = setup();
+  const skills = join(home, '.claude', 'skills');
+  const put = (name, fm) => {
+    mkdirSync(join(skills, name), { recursive: true });
+    writeFileSync(join(skills, name, 'SKILL.md'), `---\nname: ${name}\n${fm}\n---\nbody\n`);
+  };
+  put('folded', 'description: >\n  Use when one.\n  Then two.\nother: x');
+  put('literal', 'description: |-\n  Use when one.\n  Then two.');
+  put('crlf', 'description: >\n  Use when one.'.replace(/\n/g, '\r\n'));
+  const chars = (n) => userSkills(home).find((s) => s.name === n).chars;
+  assert.equal(chars('folded'), 'Use when one. Then two.'.length);
+  assert.equal(chars('literal'), 'Use when one.\nThen two.'.length);
+  assert.equal(chars('crlf'), 'Use when one.'.length);
+});

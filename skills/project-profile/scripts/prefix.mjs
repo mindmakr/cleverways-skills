@@ -52,6 +52,12 @@ const localSettings = (project) => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error(`${file} is not a JSON object; fix or move it, nothing was changed`);
   }
+  for (const key of ['enabledPlugins', 'skillOverrides']) {
+    const v = value[key];
+    if (v !== undefined && (!v || typeof v !== 'object' || Array.isArray(v))) {
+      throw new Error(`${file}: ${key} is not a JSON object; fix or move it, nothing was changed`);
+    }
+  }
   return value;
 };
 
@@ -66,8 +72,22 @@ const isDir = (p) => {
 const description = (file) => {
   try {
     const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(readFileSync(file, 'utf8').replace(/^﻿/, ''));
-    const d = m && /^description:\s*(.*)$/m.exec(m[1]);
-    return d ? d[1].trim().replace(/^["']|["']$/g, '').length : 0;
+    const d = m && /^description:[ \t]*(.*)$/m.exec(m[1]);
+    if (!d) return 0;
+    const head = d[1].trim();
+    const block = /^([>|])[+-]?\d*$/.exec(head);
+    if (block) {
+      // YAML block scalar: the text is on the indented lines that follow.
+      const rest = m[1].slice(d.index + d[0].length).split(/\r?\n/).slice(1);
+      const lines = [];
+      for (const l of rest) {
+        if (l.trim() && !/^\s/.test(l)) break;
+        lines.push(l.trim());
+      }
+      while (lines.length && !lines[lines.length - 1]) lines.pop();
+      return lines.join(block[1] === '>' ? ' ' : '\n').length;
+    }
+    return head.replace(/^["']|["']$/g, '').length;
   } catch {
     return 0;
   }
@@ -134,12 +154,13 @@ export function report(project, home, keep = []) {
   const skills = userSkills(home);
   const servers = mcpServers(project, home);
   const kept = keepers(project, home, keep);
+  const local = localSettings(project);
   const on = Object.entries(plugins).filter(([, v]) => v.on).map(([k]) => k);
   return {
     plugins: { enabled: on.length, keep: on.filter((k) => matches(kept, k)), off: on.filter((k) => !matches(kept, k)) },
     skills: { count: skills.length, descriptionChars: skills.reduce((n, s) => n + s.chars, 0) },
     mcpServers: { count: servers.length, names: servers },
-    trimmed: existsSync(join(project, LOCAL)),
+    trimmed: ['enabledPlugins', 'skillOverrides'].some((k) => Object.keys(local[k] || {}).length > 0),
   };
 }
 
@@ -167,6 +188,11 @@ export function draft(project, home, { keep = [], syncOff = false } = {}) {
   return next;
 }
 
+// The project's path under the repo root, with a trailing slash ("" at the root).
+function prefixInRepo(project) {
+  return execFileSync('git', ['-C', project, 'rev-parse', '--show-prefix'], { encoding: 'utf8' }).trim();
+}
+
 function excludeFile(project) {
   const p = execFileSync('git', ['-C', project, 'rev-parse', '--git-path', 'info/exclude'], { encoding: 'utf8' }).trim();
   return isAbsolute(p) ? p : resolve(project, p);
@@ -180,10 +206,11 @@ export function write(project, home, opts) {
   let excluded = false;
   try {
     const ex = excludeFile(project);
+    const entry = prefixInRepo(project) + LOCAL;
     const text = existsSync(ex) ? readFileSync(ex, 'utf8') : '';
-    if (!text.split(/\r?\n/).includes(LOCAL)) {
+    if (!text.split(/\r?\n/).includes(entry)) {
       mkdirSync(dirname(ex), { recursive: true });
-      appendFileSync(ex, (text && !text.endsWith('\n') ? '\n' : '') + LOCAL + '\n');
+      appendFileSync(ex, (text && !text.endsWith('\n') ? '\n' : '') + entry + '\n');
     }
     excluded = true;
   } catch {
@@ -201,13 +228,21 @@ function main(argv) {
   }
 }
 
+function usage() {
+  console.error('usage: prefix.mjs report|draft|write [--project <dir>] [--home <dir>] [--keep a,b] [--sync-off] [--confirm]');
+  return 2;
+}
+
 function run(argv) {
   const [cmd, ...rest] = argv;
   const opt = { project: process.cwd(), home: homedir(), keep: [], syncOff: false, confirm: false };
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i];
-    if (a === '--project') opt.project = resolve(rest[++i]);
-    else if (a === '--home') opt.home = resolve(rest[++i]);
+    if (a === '--project' || a === '--home') {
+      const v = rest[++i];
+      if (!v) return usage();
+      opt[a.slice(2)] = resolve(v);
+    }
     else if (a === '--keep') opt.keep = (rest[++i] || '').split(',').map((s) => s.trim()).filter(Boolean);
     else if (a === '--sync-off') opt.syncOff = true;
     else if (a === '--confirm') opt.confirm = true;
@@ -226,8 +261,7 @@ function run(argv) {
     const r = write(opt.project, opt.home, opt);
     console.log(`wrote ${r.file}${r.excluded ? ' (added to the git exclude)' : ' (not a git repository: ignore it yourself)'}`);
   } else {
-    console.error('usage: prefix.mjs report|draft|write [--project <dir>] [--home <dir>] [--keep a,b] [--sync-off] [--confirm]');
-    return 2;
+    return usage();
   }
   return 0;
 }
