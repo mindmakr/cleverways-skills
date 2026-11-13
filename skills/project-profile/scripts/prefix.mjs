@@ -36,6 +36,25 @@ const readJson = (file) => {
   }
 };
 
+// The project's own local file. Missing or empty is {}; present but not a JSON
+// object is an error, so a draft or a write never drops the keys it cannot read.
+const localSettings = (project) => {
+  const file = join(project, LOCAL);
+  if (!existsSync(file)) return {};
+  const text = readFileSync(file, 'utf8').replace(/^﻿/, '');
+  if (!text.trim()) return {};
+  let value;
+  try {
+    value = JSON.parse(text);
+  } catch (e) {
+    throw new Error(`${file} is not valid JSON (${e.message}); fix or move it, nothing was changed`);
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`${file} is not a JSON object; fix or move it, nothing was changed`);
+  }
+  return value;
+};
+
 const isDir = (p) => {
   try {
     return statSync(p).isDirectory(); // statSync follows symlinks and junctions
@@ -104,7 +123,7 @@ export function keepers(project, home, keep = []) {
   const projectOn = Object.entries(readJson(join(project, '.claude', 'settings.json'))?.enabledPlugins || {})
     .filter(([, v]) => v === true)
     .map(([k]) => k);
-  const localOn = Object.entries(readJson(join(project, LOCAL))?.enabledPlugins || {})
+  const localOn = Object.entries(localSettings(project).enabledPlugins || {})
     .filter(([, v]) => v === true)
     .map(([k]) => k);
   return [...keep, SETUP_PLUGIN, ...projectOn, ...localOn];
@@ -127,7 +146,7 @@ export function report(project, home, keep = []) {
 // The merged file. Existing keys stay; a plugin or skill the file already
 // sets, or that is kept, is not changed.
 export function draft(project, home, { keep = [], syncOff = false } = {}) {
-  const current = readJson(join(project, LOCAL)) || {};
+  const current = localSettings(project);
   const kept = keepers(project, home, keep);
   const ep = { ...(current.enabledPlugins || {}) };
   for (const [k, v] of Object.entries(enabledPlugins(project, home))) {
@@ -174,6 +193,15 @@ export function write(project, home, opts) {
 }
 
 function main(argv) {
+  try {
+    return run(argv);
+  } catch (e) {
+    console.error(e.message);
+    return 1;
+  }
+}
+
+function run(argv) {
   const [cmd, ...rest] = argv;
   const opt = { project: process.cwd(), home: homedir(), keep: [], syncOff: false, confirm: false };
   for (let i = 0; i < rest.length; i++) {

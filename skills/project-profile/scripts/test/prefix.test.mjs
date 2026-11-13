@@ -127,3 +127,34 @@ test('an unknown argument exits 2', () => {
   const { home, project } = setup();
   assert.equal(run(home, project, 'report', '--nope').status, 2);
 });
+
+test('a local file that does not parse stops draft, write and report, and is left as it was', () => {
+  for (const [name, bad] of [
+    ['trailing comma', '{"permissions":{"allow":["Bash(ls)"]},}'],
+    ['an array', '[1]'],
+    ['null', 'null'],
+  ]) {
+    const { home, project } = setup();
+    const file = join(project, '.claude', 'settings.local.json');
+    mkdirSync(join(file, '..'), { recursive: true });
+    writeFileSync(file, bad);
+    for (const args of [['draft'], ['write', '--confirm'], ['report']]) {
+      const r = run(home, project, ...args);
+      assert.equal(r.status, 1, `${name} ${args[0]}`);
+      assert.match(r.stderr, /settings\.local\.json is not/, `${name} ${args[0]}`);
+      assert.equal(r.stdout, '', `${name} ${args[0]}`);
+    }
+    assert.equal(readFileSync(file, 'utf8'), bad, name);
+    assert.throws(() => draft(project, home), /settings\.local\.json is not/);
+  }
+});
+
+test('an empty local file and a file with a byte order mark are read', () => {
+  const { home, project } = setup();
+  const file = join(project, '.claude', 'settings.local.json');
+  mkdirSync(join(file, '..'), { recursive: true });
+  writeFileSync(file, '  \n');
+  assert.equal(run(home, project, 'draft').status, 0);
+  writeFileSync(file, '\uFEFF{"permissions":{"allow":["Bash(ls)"]}}');
+  assert.deepEqual(draft(project, home).permissions, { allow: ['Bash(ls)'] });
+});
